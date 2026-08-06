@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Test 8: Browser Events — Proctoring</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0e0e1a;
+    color: #ddd;
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  h1 { color: #a0a0ff; font-size: 1.1rem; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 0.75rem; margin-bottom: 20px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .card {
+    background: #14141f;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .card h2 { font-size: 0.8rem; color: #888; margin-bottom: 12px; text-transform: uppercase; }
+
+  .event-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #1e1e2e;
+    font-size: 0.82rem;
+  }
+  .event-row:last-child { border-bottom: none; }
+
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #333;
+    margin-right: 8px;
+    display: inline-block;
+    transition: background 0.1s;
+  }
+  .dot.active { background: #ff4444; box-shadow: 0 0 8px #ff4444; }
+  .dot.ok     { background: #44ff88; box-shadow: 0 0 8px #44ff88; }
+
+  .count { color: #ff8844; font-weight: bold; min-width: 30px; text-align: right; }
+
+  .log-box {
+    height: 200px;
+    overflow-y: auto;
+    background: #0a0a12;
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 0.72rem;
+    border: 1px solid #1e1e2e;
+  }
+  .log-entry {
+    padding: 2px 0;
+    border-bottom: 1px solid #15151f;
+    display: flex;
+    gap: 8px;
+  }
+  .log-time { color: #556; min-width: 60px; }
+  .log-type { min-width: 140px; }
+  .log-detail { color: #888; }
+  .log-entry.warn .log-type { color: #ff6644; }
+  .log-entry.info .log-type { color: #44aaff; }
+  .log-entry.crit .log-type { color: #ff3333; font-weight: bold; }
+
+  .score-box {
+    text-align: center;
+    padding: 20px;
+  }
+  .score-num {
+    font-size: 4rem;
+    font-weight: bold;
+    line-height: 1;
+    transition: color 0.3s;
+  }
+  .score-label { font-size: 0.75rem; color: #666; margin-top: 4px; }
+  .score-bar {
+    height: 8px;
+    background: #222;
+    border-radius: 4px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+  .score-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s, background 0.3s;
+  }
+
+  .alert-banner {
+    background: #1a0000;
+    border: 1px solid #440000;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    font-size: 0.8rem;
+    color: #ff8888;
+    display: none;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
+
+  .instructions {
+    font-size: 0.72rem;
+    color: #555;
+    line-height: 1.6;
+    margin-top: 12px;
+  }
+  kbd {
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 0.7rem;
+    color: #aaa;
+  }
+</style>
+</head>
+<body>
+
+<h1>TEST 8: Browser Events — Proctoring</h1>
+<p class="subtitle">Open this file in a browser. Try: switching tabs, pressing Ctrl+C, exiting fullscreen, right-clicking.</p>
+
+<div id="alertBanner" class="alert-banner">⚠ VIOLATION DETECTED — See log below</div>
+
+<div class="grid">
+  <!-- Left: event status -->
+  <div class="card">
+    <h2>Live Event Status</h2>
+    <div class="event-row">
+      <span><span class="dot ok" id="dot-tab"></span>Tab visible</span>
+      <span class="count" id="cnt-tab">0</span>
+    </div>
+    <div class="event-row">
+      <span><span class="dot ok" id="dot-fs"></span>Fullscreen</span>
+      <span class="count" id="cnt-fs">0</span>
+    </div>
+    <div class="event-row">
+      <span><span class="dot" id="dot-copy"></span>Copy attempt</span>
+      <span class="count" id="cnt-copy">0</span>
+    </div>
+    <div class="event-row">
+      <span><span class="dot" id="dot-paste"></span>Paste attempt</span>
+      <span class="count" id="cnt-paste">0</span>
+    </div>
+    <div class="event-row">
+      <span><span class="dot" id="dot-ctx"></span>Right-click</span>
+      <span class="count" id="cnt-ctx">0</span>
+    </div>
+    <div class="event-row">
+      <span><span class="dot" id="dot-key"></span>Ctrl/Cmd shortcut</span>
+      <span class="count" id="cnt-key">0</span>
+    </div>
+    <div class="event-row">
+      <span><span class="dot" id="dot-blur"></span>Window blur</span>
+      <span class="count" id="cnt-blur">0</span>
+    </div>
+    <div class="event-row">
+      <span><span class="dot" id="dot-sel"></span>Text selection</span>
+      <span class="count" id="cnt-sel">0</span>
+    </div>
+
+    <div class="instructions">
+      Try these to trigger events:<br>
+      <kbd>Ctrl+C</kbd> copy &nbsp;
+      <kbd>Ctrl+V</kbd> paste &nbsp;
+      <kbd>Alt+Tab</kbd> switch tab<br>
+      Right-click anywhere &nbsp; Select text below:<br>
+      <span style="color:#334;user-select:text">→ Select this text to trigger selection event ←</span>
+    </div>
+  </div>
+
+  <!-- Right: score + log -->
+  <div>
+    <div class="card score-box" style="margin-bottom:16px">
+      <h2>Integrity Score</h2>
+      <div class="score-num" id="scoreNum">100</div>
+      <div class="score-label">/ 100</div>
+      <div class="score-bar"><div class="score-fill" id="scoreFill" style="width:100%;background:#44ff88"></div></div>
+    </div>
+
+    <div class="card">
+      <h2>Event Log</h2>
+      <div class="log-box" id="logBox"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const counts = {tab:0, fs:0, copy:0, paste:0, ctx:0, key:0, blur:0, sel:0};
+  let score = 100;
+  const SEVERITY = {tab:8, fs:6, copy:5, paste:4, ctx:2, key:3, blur:5, sel:1};
+
+  function timestamp() {
+    const n = new Date();
+    return n.toTimeString().slice(0,8);
+  }
+
+  function log(type, detail, severity='info') {
+    const box = document.getElementById('logBox');
+    const row = document.createElement('div');
+    row.className = `log-entry ${severity}`;
+    row.innerHTML = `<span class="log-time">${timestamp()}</span>
+                     <span class="log-type">${type}</span>
+                     <span class="log-detail">${detail}</span>`;
+    box.insertBefore(row, box.firstChild);
+    if (box.children.length > 100) box.removeChild(box.lastChild);
+  }
+
+  function flash(dotId, active=true) {
+    const dot = document.getElementById(dotId);
+    dot.classList.add('active');
+    dot.classList.remove('ok');
+    setTimeout(() => {
+      dot.classList.remove('active');
+      if (dotId === 'dot-tab' && document.visibilityState === 'visible') dot.classList.add('ok');
+      if (dotId === 'dot-fs' && document.fullscreenElement) dot.classList.add('ok');
+    }, 800);
+  }
+
+  function flag(key, detail, sev='warn') {
+    counts[key]++;
+    document.getElementById(`cnt-${key}`).textContent = counts[key];
+    flash(`dot-${key}`);
+
+    score = Math.max(0, score - SEVERITY[key]);
+    const fill = document.getElementById('scoreFill');
+    const num  = document.getElementById('scoreNum');
+    num.textContent = score;
+    fill.style.width = score + '%';
+    fill.style.background = score >= 85 ? '#44ff88' : score >= 60 ? '#ffaa44' : '#ff4444';
+    num.style.color        = score >= 85 ? '#44ff88' : score >= 60 ? '#ffaa44' : '#ff4444';
+
+    log(key.toUpperCase() + ' EVENT', detail, sev);
+
+    const banner = document.getElementById('alertBanner');
+    banner.style.display = 'block';
+    setTimeout(() => banner.style.display = 'none', 3000);
+  }
+
+  // ── Tab visibility ──────────────────────────────────────────────────────────
+  document.addEventListener('visibilitychange', () => {
+    const dot = document.getElementById('dot-tab');
+    if (document.visibilityState === 'hidden') {
+      dot.classList.remove('ok');
+      flag('tab', 'Tab switched / window hidden', 'crit');
+    } else {
+      dot.classList.add('ok');
+      log('TAB_RESTORE', 'User returned to tab', 'info');
+    }
+  });
+  // Init
+  document.getElementById('dot-tab').classList.add('ok');
+
+  // ── Fullscreen ──────────────────────────────────────────────────────────────
+  document.addEventListener('fullscreenchange', () => {
+    const dot = document.getElementById('dot-fs');
+    if (!document.fullscreenElement) {
+      dot.classList.remove('ok');
+      flag('fs', 'Exited fullscreen mode', 'warn');
+    } else {
+      dot.classList.add('ok');
+      log('FULLSCREEN_ENTER', 'Entered fullscreen', 'info');
+    }
+  });
+
+  // ── Copy ────────────────────────────────────────────────────────────────────
+  document.addEventListener('copy', (e) => {
+    const sel = window.getSelection()?.toString().slice(0,40) || '';
+    flag('copy', `Copied: "${sel}"`, 'warn');
+  });
+
+  // ── Paste ───────────────────────────────────────────────────────────────────
+  document.addEventListener('paste', (e) => {
+    flag('paste', 'Paste attempted', 'warn');
+  });
+
+  // ── Right-click ─────────────────────────────────────────────────────────────
+  document.addEventListener('contextmenu', (e) => {
+    flag('ctx', `Right-click at (${e.clientX}, ${e.clientY})`, 'info');
+  });
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      flag('key', `Shortcut: ${e.ctrlKey?'Ctrl':'Cmd'}+${e.key.toUpperCase()}`, 'warn');
+    }
+  });
+
+  // ── Window blur ─────────────────────────────────────────────────────────────
+  window.addEventListener('blur', () => {
+    flag('blur', 'Window lost focus (Alt+Tab or click outside)', 'crit');
+  });
+  window.addEventListener('focus', () => {
+    log('WINDOW_FOCUS', 'Window regained focus', 'info');
+  });
+
+  // ── Text selection ───────────────────────────────────────────────────────────
+  let selTimer = null;
+  document.addEventListener('selectionchange', () => {
+    const sel = window.getSelection()?.toString();
+    if (sel && sel.length > 3) {
+      clearTimeout(selTimer);
+      selTimer = setTimeout(() => {
+        flag('sel', `Selected: "${sel.slice(0,40)}"`, 'info');
+      }, 500);
+    }
+  });
+
+  // ── Enter fullscreen button ──────────────────────────────────────────────────
+  // (Add button to test fullscreen exit)
+  const btn = document.createElement('button');
+  btn.textContent = '[ Enter Fullscreen to test exit event ]';
+  btn.style.cssText = 'margin-top:16px;background:#1a1a2a;color:#aaa;border:1px solid #333;padding:8px 16px;border-radius:4px;cursor:pointer;font-family:monospace;font-size:0.75rem;display:block;';
+  btn.onclick = () => document.documentElement.requestFullscreen?.();
+  document.body.appendChild(btn);
+
+  log('SYSTEM', 'Browser proctoring initialized — all event listeners active', 'info');
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+All the features which afraz included in the meeting 20-05-2026
+
+Two crucial features are :
+
+1) Adding a coding platform or apti platform for live testing
+
+2) making a screen monitoring feature also for live tesing on excel and other where we will tae the scrennshot of the screen from backend and accordingly giving to llm and seeing whether the candidate is doing cheating or not - the way we did in abhayam.
+
+
