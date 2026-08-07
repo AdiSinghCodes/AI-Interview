@@ -1,6 +1,28 @@
-*.exe
+# Node & Dependencies
+node_modules/
+dist/
+build/
+.cache/
+
+# Python & Virtual Environments
 __pycache__/
-*.pyc
-*.zip
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
 .DS_Store
 Thumbs.db
+
+# Logs & Temporary files
+*.log
+scratch/

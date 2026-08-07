@@ -1,0 +1,47 @@
+.timer-container {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 50%;
+  background: var(--glass-bg);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+}
+
+.timer-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.timer-bg {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+
+.timer-progress {
+  stroke: var(--primary-accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear, stroke 0.3s;
+  filter: drop-shadow(0 0 4px var(--primary-accent));
+}
+
+.timer-progress.warning {
+  stroke: var(--danger);
+  filter: drop-shadow(0 0 4px var(--danger));
+}
+
+.timer-text {
+  position: relative;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  z-index: 2;
+}
+
+.timer-text.warning {
+  color: var(--danger);
+  animation: pulse 1s infinite;
+}

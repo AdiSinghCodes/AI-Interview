@@ -1,0 +1,73 @@
+.score-card {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  transition: transform var(--transition-normal);
+}
+
+.score-card:hover {
+  transform: translateY(-5px);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sc-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  justify-content: center;
+}
+
+.sc-icon {
+  font-size: 1.2rem;
+}
+
+.sc-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.sc-body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.sc-circular-progress {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.sc-circle-bg {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+
+.sc-circle-fill {
+  transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sc-circle-fill.high { stroke: var(--success); filter: drop-shadow(0 0 5px var(--success)); }
+.sc-circle-fill.medium { stroke: var(--warning); filter: drop-shadow(0 0 5px var(--warning)); }
+.sc-circle-fill.low { stroke: var(--danger); filter: drop-shadow(0 0 5px var(--danger)); }
+
+.sc-score-value {
+  position: absolute;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: baseline;
+}
+
+.sc-percent {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-left: 2px;
+}

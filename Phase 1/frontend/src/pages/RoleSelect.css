@@ -1,0 +1,150 @@
+.role-select-page {
+  padding: var(--space-8) var(--space-4);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+}
+
+.rs-container {
+  max-width: 1000px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.rs-title {
+  font-size: 2.5rem;
+  text-align: center;
+}
+
+.rs-subtitle {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+}
+
+.roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.role-card {
+  padding: var(--space-6);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  position: relative;
+  overflow: hidden;
+  border: 2px solid transparent;
+}
+
+.role-card:hover {
+  transform: translateY(-5px);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.role-card.selected {
+  border-color: var(--primary-accent);
+  background: rgba(0, 212, 255, 0.05);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+}
+
+.role-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--space-3);
+}
+
+.role-title {
+  font-size: 1.25rem;
+  margin-bottom: var(--space-2);
+  color: var(--text-primary);
+}
+
+.role-desc {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.role-selected-indicator {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 24px;
+  height: 24px;
+  background: var(--primary-accent);
+  color: #000;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  animation: scaleIn 0.3s ease;
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+.rs-config {
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  margin-top: var(--space-4);
+}
+
+.config-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.config-group h3 {
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+.pill-group {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+}
+
+.pill-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  font-weight: 500;
+  transition: all var(--transition-normal);
+}
+
+.pill-btn:hover {
+  color: var(--text-primary);
+}
+
+.pill-btn.active {
+  background: var(--grad-primary);
+  color: white;
+  box-shadow: 0 0 10px rgba(124, 58, 237, 0.4);
+}
+
+.rs-action {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.begin-btn {
+  font-size: 1.25rem;
+  padding: var(--space-4) var(--space-12);
+}
