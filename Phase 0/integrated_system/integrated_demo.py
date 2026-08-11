@@ -28,6 +28,16 @@ class IntegratedInterviewDemo:
         self.voice_message_time = 0.0
         self.voice_message_display_sec = 4.0
 
+        # How long to hold the "INTERVIEW TERMINATED" banner on screen
+        # before the session auto-stops.
+        self.termination_hold_sec = 3.0
+        self.terminated_at = None
+
+        # How long a live caption stays on screen after it's transcribed
+        # (transcription only completes once the candidate pauses, so this
+        # is intentionally a bit generous).
+        self.caption_display_sec = 6.0
+
         if AUDIO_AVAILABLE:
             try:
                 self.audio_stream = sd.InputStream(
@@ -94,8 +104,34 @@ class IntegratedInterviewDemo:
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
+                # Auto-stop the session once the rejection banner has been
+                # visible long enough for the candidate to see it.
+                if result['interview_terminated']:
+                    if self.terminated_at is None:
+                        self.terminated_at = time.time()
+                    elif time.time() - self.terminated_at >= self.termination_hold_sec:
+                        break
+
         finally:
             self.cleanup()
+
+    @staticmethod
+    def _wrap_text(text: str, max_width_px: int, font, scale: float, thickness: int) -> list:
+        """Greedy word-wrap so caption text fits within the frame width."""
+        words = text.split()
+        lines = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if cv2.getTextSize(candidate, font, scale, thickness)[0][0] <= max_width_px:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        return lines or [""]
 
     def _draw_unified_dashboard(self, frame: np.ndarray, result: dict,
                                 frame_w: int, frame_h: int) -> np.ndarray:
@@ -194,6 +230,22 @@ class IntegratedInterviewDemo:
             violation_text = f"Violations This Frame: {violations_found}"
             cv2.putText(frame, violation_text, (10, y_offset),
                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+        # ===== LIVE CAPTIONS =====
+        captions = result['details'].get('captions', {})
+        caption_text = captions.get('text', '')
+        caption_time = captions.get('time', 0.0)
+        if caption_text and (time.time() - caption_time < self.caption_display_sec):
+            lines = self._wrap_text(caption_text, frame_w - 30, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+            line_h = 32
+            banner_h = line_h * len(lines) + 16
+            banner_y = frame_h - 140 - banner_h
+            overlay = frame.copy()
+            cv2.rectangle(overlay, (0, banner_y), (frame_w, banner_y + banner_h), (0, 0, 0), -1)
+            frame = cv2.addWeighted(overlay, 0.55, frame, 0.45, 0)
+            for i, line in enumerate(lines):
+                cv2.putText(frame, line, (15, banner_y + 26 + i * line_h),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
         # ===== VOICE COACHING BANNER =====
         if (self.active_voice_message and
