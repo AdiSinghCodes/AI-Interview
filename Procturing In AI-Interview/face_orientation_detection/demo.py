@@ -21,11 +21,17 @@ class FaceOrientationDemo:
             camera_id: Webcam ID (default 0)
         """
         self.detector = FaceOrientationDetector()
-        self.cap = cv2.VideoCapture(camera_id)
+        self.cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
+
+        if not self.cap.isOpened():
+            self.cap = cv2.VideoCapture(camera_id)
+        if not self.cap.isOpened():
+            self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
         
         if not self.cap.isOpened():
-            print("Error: Could not open camera")
+            print("Error: Could not open camera. Please check if another camera index or app is active.")
             sys.exit(1)
+
         
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -86,7 +92,25 @@ class FaceOrientationDemo:
     
     def _draw_visualization(self, frame: np.ndarray, result: dict,
                            frame_w: int, frame_h: int) -> np.ndarray:
-        """Draw orientation visualization on frame"""
+        """Draw orientation visualization and Big Centered Circle framing target shape on frame"""
+        
+        # 1. Draw Big Centered Circle Target Guide (Generous Head Boundary)
+        cx, cy = frame_w // 2, int(frame_h * 0.50)
+        rx, ry = int(frame_w * 0.32), int(frame_h * 0.38)  # Big generous circle
+        
+        is_misaligned = result.get('is_misaligned', True)
+        guide_color = (0, 255, 0) if not is_misaligned else (0, 165, 255)
+        guide_thickness = 3
+        
+        # Draw Big Oval/Circle
+        cv2.ellipse(frame, (cx, cy), (rx, ry), 0, 0, 360, guide_color, guide_thickness)
+        
+        # Reticle Crosshair in center of Big Circle
+        cv2.drawMarker(frame, (cx, cy), guide_color, cv2.MARKER_CROSS, 20, 2)
+        
+        guide_label = "KEEP FACE INSIDE CIRCLE" if not is_misaligned else "PLEASE KEEP YOUR FACE INSIDE THE CIRCLE"
+        cv2.putText(frame, guide_label, (cx - 160, cy - ry - 12),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, guide_color, 2)
         
         if not result['face_box']:
             return frame
@@ -102,33 +126,23 @@ class FaceOrientationDemo:
         face_cx, face_cy = result['face_center']
         cv2.circle(frame, (face_cx, face_cy), 5, color, -1)
         
-        # Draw frame center crosshair
-        frame_cx, frame_cy = result['frame_center']
-        cv2.drawMarker(frame, (frame_cx, frame_cy), (0, 255, 0),
-                      cv2.MARKER_CROSS, 20, 2)
-        
-        # Draw line from face center to frame center
-        if result['is_misaligned']:
-            cv2.line(frame, (face_cx, face_cy), (frame_cx, frame_cy),
-                    (0, 165, 255), 2)
-        
-        # Display orientation info
-        y_offset = 30
+        # Display orientation info (Clean ASCII text without emoji artifacts)
+        y_offset = 75
         cv2.putText(frame, f"Alignment: {result['alignment']}", (10, y_offset),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         
-        cv2.putText(frame, f"Yaw: {result['yaw']:.1f}° | Pitch: {result['pitch']:.1f}°",
-                   (10, y_offset + 30),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1)
+        cv2.putText(frame, f"Yaw: {result['yaw']:.1f} | Pitch: {result['pitch']:.1f}",
+                   (10, y_offset + 25),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 1)
         
-        cv2.putText(frame, f"Roll: {result['roll']:.1f}° | Face Size: {result['face_area_ratio']:.2%}",
-                   (10, y_offset + 60),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1)
+        cv2.putText(frame, f"Roll: {result['roll']:.1f} | Face Size: {result['face_area_ratio']:.2%}",
+                   (10, y_offset + 50),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 1)
         
         # Display reason for misalignment
-        if result['misalignment_reason'] and result['is_misaligned']:
+        if result['misalignment_reason'] and is_misaligned:
             reason = result['misalignment_reason']
-            cv2.putText(frame, f"Issue: {reason}", (10, y_offset + 90),
+            cv2.putText(frame, f"Issue: {reason}", (10, y_offset + 75),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 1)
         
         return frame
@@ -139,46 +153,65 @@ class FaceOrientationDemo:
         
         warning_count = result['warning_count']
         is_misaligned = result['is_misaligned']
+        out_duration = result.get('out_of_bounds_duration', 0.0)
+        out_threshold = result.get('out_of_bounds_threshold', 5.0)
         
         # Determine color and status based on warning level
         if warning_count >= 5:
             color = (0, 0, 255)  # Red
             thickness = 4
-            status_text = "⛔ REJECTED - TOO MANY WARNINGS"
+            status_text = "REJECTED - TOO MANY WARNINGS"
+            status_color = (0, 0, 255)
         elif warning_count >= 4:
             color = (0, 0, 255)  # Red
             thickness = 3
-            status_text = f"⚠️  WARNING {warning_count}/5 - FINAL WARNING"
-        elif warning_count >= 3:
-            color = (0, 165, 255)  # Orange
-            thickness = 2
-            status_text = f"⚠️  WARNING {warning_count}/5 - SERIOUS"
+            status_text = f"WARNING {warning_count}/5 - FINAL WARNING"
+            status_color = (0, 0, 255)
         elif warning_count >= 1:
             color = (0, 165, 255)  # Orange
             thickness = 2
-            status_text = f"⚠️  WARNING {warning_count}/5"
+            status_text = f"WARNING {warning_count}/5"
+            status_color = (0, 165, 255)
         else:
-            color = (0, 255, 0)  # Green
-            thickness = 1
-            status_text = "✓ PROPERLY ALIGNED"
+            if is_misaligned:
+                color = (0, 165, 255)
+                thickness = 2
+                status_text = f"PLEASE KEEP YOUR FACE INSIDE THE CIRCLE ({out_duration:.1f}s / {out_threshold:.1f}s)"
+                status_color = (0, 165, 255)
+            else:
+                color = (0, 255, 0)  # Green
+                thickness = 1
+                status_text = "FACE PROPERLY INSIDE CIRCLE"
+                status_color = (0, 255, 0)
         
         # Draw border around frame
         cv2.rectangle(frame, (0, 0), (frame_w - 1, frame_h - 1), color, thickness)
         
         # Draw status bar at top
-        cv2.rectangle(frame, (0, 0), (frame_w, 50), color, -1)
-        cv2.putText(frame, status_text, (10, 35),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
+        cv2.rectangle(frame, (0, 0), (frame_w, 55), color, -1)
+        cv2.putText(frame, status_text, (10, 38),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
         
         # Draw warning counter
         counter_text = f"Warnings: {warning_count}/5"
-        text_size = cv2.getTextSize(counter_text, cv2.FONT_HERSHEY_SIMPLEX, 1.2, 2)[0]
+        text_size = cv2.getTextSize(counter_text, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 2)[0]
         counter_x = frame_w - text_size[0] - 15
-        counter_y = 35
+        counter_y = 38
         
-        cv2.rectangle(frame, (counter_x - 10, 5), (frame_w - 5, 50), color, -1)
+        cv2.rectangle(frame, (counter_x - 10, 5), (frame_w - 5, 50), status_color, -1)
         cv2.putText(frame, counter_text, (counter_x, counter_y),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2)
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+        
+        # Live out-of-bounds timer & progress bar at bottom
+        if is_misaligned and warning_count < 5:
+            timer_text = f"PLEASE KEEP FACE INSIDE CIRCLE: {out_duration:.1f}s / {out_threshold:.1f}s (Warning at {out_threshold:.1f}s)"
+            cv2.rectangle(frame, (0, frame_h - 45), (frame_w, frame_h), (0, 0, 0), -1)
+            
+            progress_pct = min(1.0, out_duration / out_threshold)
+            cv2.rectangle(frame, (0, frame_h - 8), (int(frame_w * progress_pct), frame_h), (0, 165, 255), -1)
+            
+            cv2.putText(frame, timer_text, (15, frame_h - 18),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 215, 255), 2)
         
         # If at max warnings, show rejection overlay
         if warning_count >= 5:
@@ -188,25 +221,22 @@ class FaceOrientationDemo:
             frame = cv2.addWeighted(overlay, 0.7, frame, 0.3, 0)
             
             rejection_text = "INTERVIEW TERMINATED"
-            text_size = cv2.getTextSize(rejection_text, cv2.FONT_HERSHEY_SIMPLEX, 2, 3)[0]
+            text_size = cv2.getTextSize(rejection_text, cv2.FONT_HERSHEY_SIMPLEX, 1.8, 3)[0]
             text_x = (frame_w - text_size[0]) // 2
             text_y = frame_h // 2 + 20
             cv2.putText(frame, rejection_text, (text_x, text_y),
-                       cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 3)
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.8, (255, 255, 255), 3)
             
-            reason_text = "Face not properly oriented"
-            reason_size = cv2.getTextSize(reason_text, cv2.FONT_HERSHEY_SIMPLEX, 1.2, 2)[0]
+            reason_text = "Face not kept inside target circle"
+            reason_size = cv2.getTextSize(reason_text, cv2.FONT_HERSHEY_SIMPLEX, 1.1, 2)[0]
             reason_x = (frame_w - reason_size[0]) // 2
             reason_y = text_y + 40
             cv2.putText(frame, reason_text, (reason_x, reason_y),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2)
-        
-        # Show current misalignment warning
-        if is_misaligned and warning_count < 5:
-            cv2.putText(frame, "⚠️ ADJUST YOUR FACE POSITION", (10, frame_h - 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.1, (255, 255, 255), 2)
         
         return frame
+
+
     
     def _get_alignment_color(self, alignment: str) -> Tuple[int, int, int]:
         """Get color based on alignment status"""

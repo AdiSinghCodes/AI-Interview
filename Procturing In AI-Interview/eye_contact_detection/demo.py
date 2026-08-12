@@ -20,12 +20,17 @@ class EyeContactDemo:
             camera_id: Webcam ID (default 0)
         """
         self.detector = EyeContactDetector()
-        self.cap = cv2.VideoCapture(camera_id)
+        self.cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
+        if not self.cap.isOpened():
+            self.cap = cv2.VideoCapture(camera_id)
+        if not self.cap.isOpened():
+            self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
         
         # Check if camera opened successfully
         if not self.cap.isOpened():
-            print("Error: Could not open camera")
+            print("Error: Could not open camera. Please check if another camera index or app is active.")
             sys.exit(1)
+
         
         # Set camera properties for better performance
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
@@ -140,15 +145,17 @@ class EyeContactDemo:
                       cv2.MARKER_CROSS, 15, 2)
         
         return frame
-    
+
     def _draw_warnings(self, frame: np.ndarray, result: dict, 
-                      frame_w: int, frame_h: int) -> np.ndarray:
+                       frame_w: int, frame_h: int) -> np.ndarray:
         """Draw warning indicators on frame"""
         
         warning_count = result['warning_count']
         is_suspicious = result['is_suspicious']
+        looking_away_duration = result.get('looking_away_duration', 0.0)
+        looking_away_threshold = result.get('looking_away_threshold', 7.5)
         
-        # Determine color based on warning level
+        # Determine color based on warning level & current status
         if warning_count >= 5:
             # REJECTED - Red with thick border
             color = (0, 0, 255)  # Red
@@ -159,39 +166,38 @@ class EyeContactDemo:
             # Critical - Red
             color = (0, 0, 255)
             thickness = 3
-            status_text = f"⚠️  WARNING {warning_count}/5 - FINAL WARNING"
+            status_text = f"⚠️ WARNING {warning_count}/5 - FINAL WARNING"
             status_color = (0, 0, 255)
-        elif warning_count >= 3:
-            # High - Orange
-            color = (0, 165, 255)
-            thickness = 2
-            status_text = f"⚠️  WARNING {warning_count}/5 - SERIOUS"
-            status_color = (0, 165, 255)
         elif warning_count >= 1:
             # Moderate - Orange
             color = (0, 165, 255)
             thickness = 2
-            status_text = f"⚠️  WARNING {warning_count}/5"
+            status_text = f"⚠️ WARNING {warning_count}/5"
             status_color = (0, 165, 255)
         else:
-            # No warning - Green
-            color = (0, 255, 0)
-            thickness = 1
-            status_text = "✓ LOOKING AT CAMERA"
-            status_color = (0, 255, 0)
+            if is_suspicious:
+                color = (0, 165, 255)
+                thickness = 2
+                status_text = f"⚠️ LOOKING AWAY ({looking_away_duration:.1f}s / {looking_away_threshold:.1f}s)"
+                status_color = (0, 165, 255)
+            else:
+                color = (0, 255, 0)
+                thickness = 1
+                status_text = "✓ LOOKING AT CAMERA"
+                status_color = (0, 255, 0)
         
         # Draw border around entire frame
         cv2.rectangle(frame, (0, 0), (frame_w - 1, frame_h - 1), color, thickness)
         
-        # Draw warning status at top
+        # Draw warning status at top bar
         cv2.rectangle(frame, (0, 0), (frame_w, 60), color, -1)
         cv2.putText(frame, status_text, (10, 40),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
         
         # Draw warning counter as large box
         warning_box_y = 80
         counter_text = f"Warnings: {warning_count}/5"
-        text_size = cv2.getTextSize(counter_text, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 3)[0]
+        text_size = cv2.getTextSize(counter_text, cv2.FONT_HERSHEY_SIMPLEX, 1.3, 3)[0]
         counter_x = frame_w - text_size[0] - 20
         counter_y = warning_box_y + text_size[1] + 10
         
@@ -199,17 +205,27 @@ class EyeContactDemo:
         cv2.rectangle(frame, (counter_x - 10, warning_box_y), 
                      (frame_w - 10, counter_y + 10), status_color, -1)
         cv2.putText(frame, counter_text, (counter_x, counter_y),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.3, (255, 255, 255), 3)
+        
+        # If looking away currently, show live timer & progress bar at bottom
+        if is_suspicious and warning_count < 5:
+            timer_text = f"⚠️ LOOKING AWAY: {looking_away_duration:.1f}s / {looking_away_threshold:.1f}s (Warning at {looking_away_threshold:.1f}s)"
+            cv2.rectangle(frame, (0, frame_h - 50), (frame_w, frame_h), (0, 0, 0), -1)
+            
+            # Progress bar width
+            progress_pct = min(1.0, looking_away_duration / looking_away_threshold)
+            cv2.rectangle(frame, (0, frame_h - 8), (int(frame_w * progress_pct), frame_h), (0, 165, 255), -1)
+            
+            cv2.putText(frame, timer_text, (15, frame_h - 18),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 215, 255), 2)
         
         # If at max warnings, show rejection message
         if warning_count >= 5:
-            # Draw rejection overlay
             overlay = frame.copy()
             cv2.rectangle(overlay, (0, frame_h // 2 - 100), (frame_w, frame_h // 2 + 100), 
                          (0, 0, 255), -1)
             frame = cv2.addWeighted(overlay, 0.7, frame, 0.3, 0)
             
-            # Draw rejection text
             rejection_text = "INTERVIEW TERMINATED"
             text_size = cv2.getTextSize(rejection_text, cv2.FONT_HERSHEY_SIMPLEX, 2, 3)[0]
             text_x = (frame_w - text_size[0]) // 2
@@ -224,11 +240,8 @@ class EyeContactDemo:
             cv2.putText(frame, reason_text, (reason_x, reason_y),
                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2)
         
-        # Draw suspicious indicator if currently suspicious
-        if is_suspicious and warning_count < 5:
-            cv2.putText(frame, "⚠️ LOOKING AWAY FROM CAMERA", (10, frame_h - 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
-        
+        return frame
+ 
         return frame
     
     def cleanup(self):

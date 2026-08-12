@@ -26,7 +26,8 @@ PHONE_CONF = 0.55
 
 PERSON_CONF = 0.55
 
-VIOLATION_TIME = 3.0
+VIOLATION_TIME = 7.5
+
 
 # ---------------------------------------------------------
 # GAZE SETTINGS

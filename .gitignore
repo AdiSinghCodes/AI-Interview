@@ -26,3 +26,6 @@ Thumbs.db
 # Logs & Temporary files
 *.log
 scratch/
+
+# Executables & Large Binaries
+*.exe

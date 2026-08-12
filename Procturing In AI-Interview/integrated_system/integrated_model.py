@@ -12,14 +12,38 @@ sys.path.insert(0, str(parent_dir / 'eye_contact_detection'))
 sys.path.insert(0, str(parent_dir / 'face_orientation_detection'))
 sys.path.insert(0, str(parent_dir / 'posture_detection'))
 sys.path.insert(0, str(parent_dir / 'object_detection'))
-sys.path.insert(0, str(parent_dir / 'voice_clarity_detection'))
+# sys.path.insert(0, str(parent_dir / 'voice_clarity_detection'))
 
 from eye_contact_model import EyeContactDetector
 from face_orientation_model import FaceOrientationDetector
 from posture_model import PostureDetector
 from object_model import ObjectDetector
-from voice_clarity_model import VoiceClarityDetector
-from caption_model import CaptionGenerator
+# from voice_clarity_model import VoiceClarityDetector
+# from caption_model import CaptionGenerator
+
+class VoiceClarityDetector:
+    SAMPLE_RATE = 16000
+    CHUNK_SIZE = 1024
+    def process_chunk(self, chunk):
+        return {
+            'voice_prob': 0.0,
+            'is_speaking': False,
+            'rms_dbfs': -100.0,
+            'clarity': 'SILENT',
+            'message': None,
+        }
+    def reset(self):
+        pass
+
+class CaptionGenerator:
+    def __init__(self, sample_rate=16000):
+        pass
+    def submit_utterance(self, audio):
+        pass
+    def get_latest_caption(self):
+        return {'text': '', 'time': 0.0}
+    def reset(self):
+        pass
 
 
 class IntegratedInterviewSystem:
