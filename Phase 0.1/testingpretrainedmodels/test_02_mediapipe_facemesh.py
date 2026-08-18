@@ -17,11 +17,16 @@ Controls:
   L  - Toggle landmark dots on/off
 """
 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['GLOG_minloglevel'] = '3'
+
 import cv2
 import numpy as np
 import time
 from collections import deque
 import math
+
 
 try:
     import mediapipe as mp
@@ -85,9 +90,17 @@ def draw_bar(frame, x, y, w, h, value, vmin, vmax, label, color):
                 (x, y - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 200, 200), 1)
 
 def main():
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    if not cap.isOpened():
+        cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    if not cap.isOpened():
+        print("❌ Failed to open webcam. Please check if another camera index or app is active.")
+        return
+
 
     face_mesh = mp_face_mesh.FaceMesh(
         static_image_mode=False,

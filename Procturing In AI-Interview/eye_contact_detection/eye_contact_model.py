@@ -29,10 +29,12 @@ class EyeContactDetector:
         
         # Warning tracking
         self.warning_count = 0
-        self.suspicious_frame_count = 0
-        self.suspicious_threshold = 60  # ~2 seconds at 30 FPS
         self.max_warnings = 5
+        self.looking_away_start_time = None
+        self.looking_away_duration = 0.0
+        self.looking_away_threshold_sec = 7.5  # 7 to 8 seconds continuous looking away required for warning
         self.head_pose_threshold = 15  # degrees
+
         
     def process_frame(self, frame: np.ndarray) -> Dict:
         """
@@ -105,9 +107,13 @@ class EyeContactDetector:
         output['head_pose'] = head_pose
         
         # Check for suspicious behavior and update warnings
-        is_suspicious = self._is_suspicious_behavior(output)
+        import time
+        current_time = time.time()
+        is_suspicious = self._is_suspicious_behavior(output, current_time)
         output['is_suspicious'] = is_suspicious
         output['warning_count'] = self.warning_count
+        output['looking_away_duration'] = self.looking_away_duration
+        output['looking_away_threshold'] = self.looking_away_threshold_sec
         
         return output
     
@@ -194,13 +200,12 @@ class EyeContactDetector:
             'roll': roll
         }
     
-    def _is_suspicious_behavior(self, result: Dict) -> bool:
+    def _is_suspicious_behavior(self, result: Dict, current_time: float) -> bool:
         """
         Detect suspicious behavior:
-        - Eyes not looking at CENTER
-        - Head turned away from camera
-        
-        Returns: True if suspicious, False if normal
+        - Candidate looking away from CENTER (LEFT, RIGHT, UP, DOWN) or head turned away
+        - Sustained looking away for 7.5 seconds triggers 1 Warning.
+        - Looking at camera resets the timer to 0.
         """
         is_suspicious = False
         
@@ -222,16 +227,25 @@ class EyeContactDetector:
             if yaw > self.head_pose_threshold or pitch > self.head_pose_threshold:
                 is_suspicious = True
         
-        # Track suspicious frames
+        # Track continuous looking away duration in seconds
         if is_suspicious:
-            self.suspicious_frame_count += 1
+            if self.looking_away_start_time is None:
+                self.looking_away_start_time = current_time
+            
+            self.looking_away_duration = current_time - self.looking_away_start_time
+            
+            # Trigger warning if candidate looks away continuously for 7.5 seconds
+            if self.looking_away_duration >= self.looking_away_threshold_sec:
+                if self.warning_count < self.max_warnings:
+                    self.warning_count += 1
+                    print(f"\n⚠️ WARNING #{self.warning_count}: Candidate looked away for > {self.looking_away_threshold_sec}s!")
+                # Reset start time to current time for subsequent warning cycle
+                self.looking_away_start_time = current_time
+                self.looking_away_duration = 0.0
         else:
-            self.suspicious_frame_count = 0
-        
-        # If suspicious for too long, increment warning
-        if self.suspicious_frame_count >= self.suspicious_threshold:
-            if self.warning_count < self.max_warnings:
-                self.warning_count += 1
-            self.suspicious_frame_count = 0  # Reset counter
+            # Looking properly at camera - reset duration timer immediately
+            self.looking_away_start_time = None
+            self.looking_away_duration = 0.0
         
         return is_suspicious
+

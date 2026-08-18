@@ -19,6 +19,11 @@ S -> Screenshot
 ------------------------------------------------
 """
 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['GLOG_minloglevel'] = '3'
+
+
 import cv2
 import numpy as np
 import time
@@ -31,6 +36,7 @@ from collections import deque
 
 try:
     import mediapipe as mp
+
 
 except ImportError:
 
@@ -63,7 +69,8 @@ GAZE_YAW_THRESH = 15.0
 
 GAZE_PITCH_THRESH = 20.0
 
-GAZE_TIME_LIMIT = 3.0
+GAZE_TIME_LIMIT = 7.5
+
 
 MAX_WARNINGS = 5
 
@@ -240,7 +247,11 @@ def main():
     # CAMERA
     # =====================================================
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    if not cap.isOpened():
+        cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
 
     cap.set(
         cv2.CAP_PROP_FRAME_WIDTH,
@@ -254,9 +265,10 @@ def main():
 
     if not cap.isOpened():
 
-        print("❌ Failed to open webcam")
+        print("❌ Failed to open webcam. Please check if another app is using the camera.")
 
         return
+
 
     # =====================================================
     # VARIABLES
