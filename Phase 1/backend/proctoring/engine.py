@@ -53,7 +53,11 @@ class ProctoringEngine:
         if self.face_mesh is None:
             try:
                 import mediapipe as mp
-                mp_face_mesh = mp.solutions.face_mesh
+                try:
+                    mp_face_mesh = mp.solutions.face_mesh
+                except AttributeError:
+                    import mediapipe.python.solutions.face_mesh as mp_face_mesh
+
                 self.face_mesh = mp_face_mesh.FaceMesh(
                     static_image_mode=False,
                     max_num_faces=1,

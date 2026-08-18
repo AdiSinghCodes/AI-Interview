@@ -12,6 +12,7 @@ venv/
 .venv/
 env/
 .env
+myenv/
 
 # IDE & Editor files
 .vscode/
@@ -26,3 +27,7 @@ Thumbs.db
 # Logs & Temporary files
 *.log
 scratch/
+
+# Generated test/audio output
+**/tts_output/
+*.wav

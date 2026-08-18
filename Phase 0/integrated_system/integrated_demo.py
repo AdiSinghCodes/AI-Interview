@@ -74,7 +74,7 @@ class IntegratedInterviewDemo:
         print("  Phase 3: Object Detection")
         print("  Phase 4: Voice Clarity Detection" + ("" if self.audio_stream else " (disabled - no mic)"))
         print()
-        print("Single Warning Counter: 0/5")
+        print(f"Single Warning Counter: 0/{self.system.max_warnings}")
         print("Press 'q' to quit and see results")
         print("=" * 70)
         print()
@@ -139,9 +139,10 @@ class IntegratedInterviewDemo:
 
         # Color scheme based on warnings
         warning_count = result['warning_count']
-        if warning_count >= 5:
+        max_warnings = self.system.max_warnings
+        if warning_count >= max_warnings:
             main_color = (0, 0, 255)  # Red
-        elif warning_count >= 3:
+        elif warning_count >= max_warnings * 3 // 5:
             main_color = (0, 165, 255)  # Orange
         elif warning_count >= 1:
             main_color = (0, 255, 255)  # Yellow
@@ -153,7 +154,7 @@ class IntegratedInterviewDemo:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
         # Large warning counter (top right)
-        warning_text = f"Warnings: {warning_count}/5"
+        warning_text = f"Warnings: {warning_count}/{max_warnings}"
         text_size = cv2.getTextSize(warning_text, cv2.FONT_HERSHEY_SIMPLEX, 2, 3)[0]
         warning_x = frame_w - text_size[0] - 20
         cv2.rectangle(frame, (warning_x - 10, 10), (frame_w - 5, 60), main_color, -1)
@@ -257,7 +258,7 @@ class IntegratedInterviewDemo:
 
         # ===== BOTTOM: Interview Status =====
         status_y = frame_h - 60
-        if warning_count >= 5:
+        if warning_count >= max_warnings:
             # REJECTION overlay
             overlay = frame.copy()
             cv2.rectangle(overlay, (0, status_y - 80), (frame_w, frame_h), (0, 0, 255), -1)
@@ -268,7 +269,7 @@ class IntegratedInterviewDemo:
             cv2.putText(frame, "Suspicious Activity Detected - Candidate Rejected",
                        (50, status_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
         else:
-            warnings_remaining = 5 - warning_count
+            warnings_remaining = max_warnings - warning_count
             status_text = f"Interview Active | {warnings_remaining} warning(s) remaining"
             cv2.putText(frame, status_text, (20, status_y),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
@@ -299,7 +300,7 @@ class IntegratedInterviewDemo:
         print("=" * 70)
         print()
         print(f"Total Frames Processed: {stats['total_frames']}")
-        print(f"Final Warning Count: {stats['final_warnings']}/5")
+        print(f"Final Warning Count: {stats['final_warnings']}/{self.system.max_warnings}")
         print()
 
         if stats['interview_result'] == 'REJECTED':

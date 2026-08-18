@@ -1,0 +1,6 @@
+sounddevice>=0.4.6
+opencv-python==4.8.1.78
+numpy>=1.26.0,<2
+silero-vad>=5.1
+torch>=2.0
+faster-whisper>=1.0.0

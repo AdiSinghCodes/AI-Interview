@@ -30,7 +30,7 @@ class IntegratedInterviewSystem:
     - Phase 2: Posture Detection
     - Phase 3: Object Detection
     
-    Single shared warning system: 0-5 warnings
+    Single shared warning system: 0-25 warnings
     """
     
     def __init__(self):
@@ -77,7 +77,7 @@ class IntegratedInterviewSystem:
 
         # Shared warning system
         self.warning_count = 0
-        self.max_warnings = 5
+        self.max_warnings = 25
 
         # Accumulated violation duration (seconds) per type, so a single
         # noisy frame (blink, brief head turn, misdetection) can't burn a

@@ -27,7 +27,7 @@ class ObjectDetector:
         
         # Thresholds
         self.multiple_people_threshold = 90  # ~3 seconds at 30 FPS
-        self.hand_carrying_threshold = 60  # ~2 seconds for hand holding object
+        self.hand_carrying_threshold = 90  # ~3 seconds for hand holding object
         self.max_warnings = 5
         
         # Detection parameters
@@ -76,9 +76,10 @@ class ObjectDetector:
         if people_count >= self.min_people_for_warning:
             output['violations']['multiple_people'] = True
         
-        # 2. Detect hands (skin-colored regions)
+        # 2. Detect hands (skin-colored regions), excluding the face/neck area
+        # so the face itself can't be misread as a "hand"
         # Returns (bool, list of bounding boxes)
-        hand_detected, hand_regions = self._detect_hands(frame)
+        hand_detected, hand_regions = self._detect_hands(frame, faces)
         output['hand_detected'] = hand_detected
         
         # 3. Detect external materials near hands
@@ -105,30 +106,69 @@ class ObjectDetector:
         
         return output
     
-    def _detect_hands(self, frame: np.ndarray) -> Tuple[bool, List]:
+    def _detect_hands(self, frame: np.ndarray, face_boxes=None) -> Tuple[bool, List]:
         """Detect hands using skin color detection
-        
+
         Returns:
             (bool, list): (hand_detected, hand_regions) where hand_regions are bounding boxes
-            
-        This is STRICT hand detection - only returns hands if clear skin regions found
+
+        This is STRICT hand detection - only returns hands if clear skin regions found.
+        The face/neck area (skin-colored, hand-sized) is masked out first so the
+        candidate's own face can't be misread as a held hand.
         """
         try:
-            # Convert to HSV for skin detection
+            # Skin detection requires BOTH an HSV match AND a YCrCb match.
+            # HSV hue alone (0-20) also matches tan/beige walls, wood, cardboard,
+            # etc. YCrCb chrominance is much more specific to actual human skin
+            # tone and is largely lighting-independent, so intersecting the two
+            # rejects most background false positives that HSV alone lets through.
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            
-            # Skin color range - tuned for hand detection
-            lower_skin = np.array([0, 10, 60], dtype=np.uint8)
-            upper_skin = np.array([20, 255, 255], dtype=np.uint8)
-            
-            # Create mask
-            mask = cv2.inRange(hsv, lower_skin, upper_skin)
-            
+            lower_hsv = np.array([0, 30, 60], dtype=np.uint8)
+            upper_hsv = np.array([25, 150, 255], dtype=np.uint8)
+            mask_hsv = cv2.inRange(hsv, lower_hsv, upper_hsv)
+
+            ycrcb = cv2.cvtColor(frame, cv2.COLOR_BGR2YCrCb)
+            lower_ycrcb = np.array([0, 133, 77], dtype=np.uint8)
+            upper_ycrcb = np.array([255, 173, 127], dtype=np.uint8)
+            mask_ycrcb = cv2.inRange(ycrcb, lower_ycrcb, upper_ycrcb)
+
+            mask = cv2.bitwise_and(mask_hsv, mask_ycrcb)
+            mh, mw = mask.shape[:2]
+
+            if face_boxes is not None and len(face_boxes) > 0:
+                # Restrict the search to the plausible arm/hand reach zone around
+                # the largest face: a few face-widths either side, from roughly
+                # eyebrow level down to the bottom of frame. Skin tone alone can't
+                # reliably tell a hand apart from a similarly-colored wall/wood
+                # background (they can be colorimetrically identical), so this
+                # keeps the search anchored to the person's body instead of
+                # scanning corners of the room (ceiling beams, furniture, etc.)
+                fx, fy, fw, fh = max(face_boxes, key=lambda f: f[2] * f[3])
+                face_cx = fx + fw // 2
+                zone_x1 = max(0, face_cx - int(fw * 3.0))
+                zone_x2 = min(mw, face_cx + int(fw * 3.0))
+                zone_y1 = max(0, fy - int(fh * 0.3))
+                zone_y2 = mh
+
+                zone_mask = np.zeros_like(mask)
+                zone_mask[zone_y1:zone_y2, zone_x1:zone_x2] = 255
+                mask = cv2.bitwise_and(mask, zone_mask)
+
+                # Exclude the face + neck/collar area itself so it can't be
+                # mistaken for a held hand
+                for (fx, fy, fw, fh) in face_boxes:
+                    pad_x = int(fw * 0.4)
+                    x1 = max(0, fx - pad_x)
+                    y1 = max(0, fy - int(fh * 0.3))
+                    x2 = min(mw, fx + fw + pad_x)
+                    y2 = min(mh, fy + int(fh * 1.8))  # extend well below chin to cover neck/collar
+                    mask[y1:y2, x1:x2] = 0
+
             # Strong morphological operations to get only clear hand regions
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
             mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=3)
             mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=2)
-            
+
             # Find contours
             contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             
