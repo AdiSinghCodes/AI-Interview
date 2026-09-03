@@ -30,6 +30,11 @@ TESTS = [
     ("Kokoro (text-to-speech)", "text_to_speech/test_09_tts_kokoro.py"),
     ("Silero VAD (voice activity)", "voice_activity_detection/test_10_vad_silero.py"),
     ("Interviewer fallback chain (end to end)", "interviewer/test_11_interviewer_fallback_chain.py"),
+    ("MuseTalk (avatar lip-sync)", "avatar/test_19_avatar_musetalk.py"),
+    ("Wav2Lip (avatar lip-sync)", "avatar/test_20_avatar_wav2lip.py"),
+    ("LivePortrait (avatar, video-driven)", "avatar/test_21_avatar_liveportrait.py"),
+    ("SadTalker (avatar lip-sync)", "avatar/test_22_avatar_sadtalker.py"),
+    ("InfiniteTalk (avatar, 14B backbone, low-VRAM)", "avatar/test_23_avatar_infinitetalk.py"),
 ]
 
 TEST_DIR = Path(__file__).parent
@@ -46,9 +51,15 @@ def main():
         print(f"--- {label} ---")
         t0 = time.perf_counter()
         try:
+            if filename.endswith("test_23_avatar_infinitetalk.py"):
+                timeout = 2000  # 14B backbone, heaviest of the avatar tests
+            elif filename.startswith("avatar/"):
+                timeout = 1200
+            else:
+                timeout = 300
             proc = subprocess.run(
                 [sys.executable, str(TEST_DIR / filename)],
-                capture_output=True, text=True, timeout=300,
+                capture_output=True, text=True, timeout=timeout,
                 cwd=str(TEST_DIR), env=env,
             )
             elapsed = time.perf_counter() - t0
@@ -59,8 +70,8 @@ def main():
                 tail = "\n".join(output.strip().splitlines()[-5:])
                 print(tail)
         except subprocess.TimeoutExpired:
-            elapsed = 300.0
-            status = "TIMEOUT (300s)"
+            elapsed = timeout
+            status = f"TIMEOUT ({timeout}s)"
         results.append((label, status, elapsed))
         print(f"[{status}] {elapsed:.1f}s\n")
 

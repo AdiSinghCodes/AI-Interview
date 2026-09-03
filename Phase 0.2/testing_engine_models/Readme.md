@@ -27,6 +27,9 @@ ollama pull nomic-embed-text
 pip install httpx faster-whisper kokoro torch
 ```
 
+Tests 19-23 (avatar/lip-sync) are a separate table below, since each of
+those is a cloned repo + checkpoint download rather than a pip package.
+
 `ENGINE_GROQ_API_KEY` must be set in
 `newai-interviewer/interview-engine/.env` for tests 5 and 6 — these scripts
 read it directly from that file (see `_harness.py`), since this project
@@ -49,6 +52,7 @@ embedder/                 test 7
 speech_to_text/           test 8
 text_to_speech/           test 9
 voice_activity_detection/ test 10
+avatar/                   tests 19-23 — lip-sync/avatar model candidates
 ```
 
 ## Run each test
@@ -78,11 +82,54 @@ python interviewer_candidates/test_17_ollama_candidate_qwen3_8b.py       # qwen3
 python interviewer_candidates/test_18_ollama_candidate_deepseek_r1_7b.py # deepseek-r1:7b
 ```
 
+Avatar / lip-sync candidates under evaluation (repos not cloned yet —
+see "Avatar model setup" below):
+
+```bash
+python avatar/test_19_avatar_musetalk.py       # MuseTalk — current pick, real-time capable, ~4-6GB
+python avatar/test_20_avatar_wav2lip.py        # Wav2Lip — lightweight fallback, ~2GB
+python avatar/test_21_avatar_liveportrait.py   # LivePortrait — video-driven only, NOT audio-native
+python avatar/test_22_avatar_sadtalker.py      # SadTalker — diffusion, slowest, moderate-high VRAM
+python avatar/test_23_avatar_infinitetalk.py    # InfiniteTalk — audio-native, 14B backbone, likely RAM-bound on this 16GB box
+```
+
 ## Run everything at once
 
 ```bash
 python test_12_full_pipeline.py
 ```
+
+## Avatar model setup (tests 19-23)
+
+Unlike the LLM/STT/TTS/VAD tests above, these aren't pip-installable —
+each is a GitHub repo with its own inference CLI and its own multi-GB
+checkpoint set. The test scripts shell out to each repo's real
+`inference.py` (or `scripts.inference` for MuseTalk, `generate_infinitetalk.py`
+for InfiniteTalk) rather than reimplementing it, so they stay correct as
+those repos evolve — but that also means each one needs to actually be
+cloned + have weights downloaded before its test will do more than print
+a `FAILED` setup checklist.
+
+Repos and checkpoints go **outside** this git repo (they're multi-GB) at
+`C:\Users\GHANSHYAM\Desktop\lipsync_models\<RepoName>` — same convention
+as `_harness.py`'s `ENGINE_ENV_FILE` pointing at the separate
+interview-engine project. See each `test_1[9]`/`test_2[0-3]` script's
+docstring for the exact `git clone` / checkpoint-download commands for
+that model.
+
+Test assets (source face photo/video, driving video for LivePortrait) go
+in `avatar/assets/` — see `avatar/assets/README.md`. Driving audio is
+shared: tests 19, 20, 22, and 23 reuse
+`text_to_speech/tts_output/round_2.wav` (generate it once via
+`test_09_tts_kokoro.py`).
+
+| Test | Model | What it catches |
+|------|-------|------------------|
+| 19 | MuseTalk | repo/checkpoints present?, real inference time + realtime factor on this project's TTS audio — this is what confirms whether the "real-time capable at ~4-6GB" claim holds on this 6GB card |
+| 20 | Wav2Lip | repo/checkpoints present?, real inference time — lightweight fallback if MuseTalk is too tight alongside the interviewer LLM |
+| 21 | LivePortrait | repo/weights present?, real inference time on the video-driven path only — this test does NOT prove audio-driven lip-sync, it just confirms the video-driven motion-transfer path this project already ruled out for audio |
+| 22 | SadTalker | repo/checkpoints present?, real inference time — diffusion-based, animates head pose too, expected to be the slowest of the four |
+| 23 | InfiniteTalk | repo/3 weight sets present?, real inference time in low-VRAM mode on a 14B-parameter backbone (Wan2.1-I2V-14B) — the only audio-native option evaluated (no separate driving video needed) but public reports put its low-VRAM path's system-RAM need at 24-32GB against this machine's ~16GB, so `FAILED` here most likely means "hit that wall," not "broken setup" |
 
 ## What each test actually checks
 
@@ -112,3 +159,6 @@ python test_12_full_pipeline.py
 - Fallback chain (11): pass, after fixing the `think` parameter bug above
   and removing `json_mode=True` from the interviewer role (it was making
   the model echo the input back as JSON instead of a spoken answer).
+- Avatar/lip-sync (19-22): not yet run — none of the 4 repos are cloned
+  locally yet. Each test currently reports `FAILED: repo not found` with
+  the exact clone command until setup happens (see "Avatar model setup").

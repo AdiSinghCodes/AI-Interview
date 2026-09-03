@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Interview Engine — step 2 test client</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  h1 { font-size: 1.2rem; }
+  #log { border: 1px solid gray; border-radius: 8px; padding: 1rem; min-height: 12rem; white-space: pre-wrap; }
+  .interviewer { color: #2563eb; }
+  .candidate { color: #16a34a; }
+  .meta { opacity: 0.6; font-size: 0.85em; }
+  button { font-size: 1rem; padding: 0.5rem 1rem; border-radius: 6px; }
+  label { display: block; margin: 0.75rem 0; }
+  #status { font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Interview Engine — live audio test (build step 2)</h1>
+<p class="meta">
+  Streams your mic to <code>/v1/rounds/&lt;id&gt;/live</code> as 16&nbsp;kHz mono PCM.
+  Silero endpoints each utterance, faster-whisper transcribes it, the orchestrator replies.
+  Replies are text only — TTS is step&nbsp;3.
+</p>
+
+<label>
+  <input type="checkbox" id="headphones" />
+  I'm wearing headphones (required — without them the interviewer's voice leaks into the mic
+  and false-triggers the endpoint).
+</label>
+
+<button id="start" disabled>Start</button>
+<button id="stop" disabled>Stop</button>
+<p id="status">idle</p>
+
+<div id="log"></div>
+
+<script>
+const SR = 16000, FRAME = 512, RECV_SR = 24000;
+const $ = (id) => document.getElementById(id);
+const log = $("log");
+let ws, ctx, node, srcNode, stream, tail = new Float32Array(0);
+let playCtx, playHead = 0;
+
+function playPCM(arrayBuffer) {
+  if (!playCtx) playCtx = new AudioContext({ sampleRate: RECV_SR });
+  const f32 = new Float32Array(arrayBuffer);
+  const buf = playCtx.createBuffer(1, f32.length, RECV_SR);
+  buf.copyToChannel(f32, 0);
+  const src = playCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(playCtx.destination);
+  const now = playCtx.currentTime;
+  playHead = Math.max(playHead, now);
+  src.start(playHead);
+  playHead += buf.duration;
+}
+
+$("headphones").addEventListener("change", (e) => { $("start").disabled = !e.target.checked; });
+
+function line(text, cls) {
+  const div = document.createElement("div");
+  if (cls) div.className = cls;
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function resampleTo16k(input, inRate) {
+  if (inRate === SR) return input;
+  const ratio = inRate / SR;
+  const outLen = Math.floor(input.length / ratio);
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const pos = i * ratio;
+    const j = Math.floor(pos), frac = pos - j;
+    out[i] = (input[j] || 0) * (1 - frac) + (input[j + 1] || 0) * frac;
+  }
+  return out;
+}
+
+function sendFrames(samples) {
+  const merged = new Float32Array(tail.length + samples.length);
+  merged.set(tail); merged.set(samples, tail.length);
+  let off = 0;
+  for (; off + FRAME <= merged.length; off += FRAME) {
+    if (ws && ws.readyState === 1) ws.send(merged.slice(off, off + FRAME).buffer);
+  }
+  tail = merged.slice(off);
+}
+
+$("start").addEventListener("click", async () => {
+  $("start").disabled = true;
+  stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
+  ctx = new AudioContext();
+  srcNode = ctx.createMediaStreamSource(stream);
+  node = ctx.createScriptProcessor(4096, 1, 1);
+  node.onaudioprocess = (e) => sendFrames(resampleTo16k(e.inputBuffer.getChannelData(0), ctx.sampleRate));
+  srcNode.connect(node);
+  node.connect(ctx.destination);
+
+  const id = "web-" + Math.random().toString(36).slice(2, 8);
+  ws = new WebSocket(`ws://${location.host}/v1/rounds/${id}/live`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => { $("status").textContent = "connected — speak, then pause"; $("stop").disabled = false; };
+  ws.onclose = () => { $("status").textContent = "closed"; };
+  ws.onmessage = (ev) => {
+    if (ev.data instanceof ArrayBuffer) { playPCM(ev.data); return; }
+    const m = JSON.parse(ev.data);
+    if (m.type === "opening") line("interviewer > " + m.text, "interviewer");
+    else if (m.type === "transcript") line("candidate  > " + (m.text || "(nothing heard)"), "candidate");
+    else if (m.type === "speaking_start") playHead = 0;
+    else if (m.type === "interviewer") {
+      line("interviewer > " + m.text, "interviewer");
+      const t = m.trace || {};
+      line(`   [${m.kind}] stt_final ${(t.stt_final||0)|0}ms · ttft ${(t.ttft||0)|0}ms · first_tts_chunk ${(t.first_tts_chunk||0)|0}ms · playback_start ${(t.playback_start||0)|0}ms`, "meta");
+    } else if (m.type === "end") line("-- " + m.reason + " --", "meta");
+  };
+});
+
+$("stop").addEventListener("click", () => {
+  if (ws) ws.send(JSON.stringify({ type: "end_round" }));
+  node && node.disconnect();
+  srcNode && srcNode.disconnect();
+  stream && stream.getTracks().forEach((t) => t.stop());
+  ctx && ctx.close();
+  $("stop").disabled = true;
+  $("start").disabled = false;
+  $("status").textContent = "stopped";
+});
+</script>
+</body>
+</html>

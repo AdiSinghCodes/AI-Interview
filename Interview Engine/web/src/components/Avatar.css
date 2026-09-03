@@ -1,0 +1,33 @@
+.avatar-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 340px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: radial-gradient(circle at 50% 30%, #1e293b 0%, #0b1120 100%);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.55);
+}
+.office-background-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at top left, rgba(56, 189, 248, 0.14), transparent 70%),
+    radial-gradient(ellipse at bottom right, rgba(129, 140, 248, 0.14), transparent 70%);
+  pointer-events: none;
+}
+.three-canvas-wrapper { position: absolute; inset: 0; }
+.three-canvas-wrapper canvas { width: 100% !important; height: 100% !important; }
+.speaking-indicator-bar {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #38bdf8, #818cf8, #38bdf8);
+  box-shadow: 0 0 14px #38bdf8;
+  animation: abar 1.1s ease-in-out infinite alternate;
+}
+@keyframes abar { from { width: 80px; opacity: 0.6; } to { width: 150px; opacity: 1; } }

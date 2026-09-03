@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "interview-engine"
+version = "0.1.0"
+description = "NTRVSTA Phase 2 — live AI interview engine (orchestrator, inference, speech, avatar)"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.5",
+    "pydantic-settings>=2.0",
+    "pyyaml>=6.0",
+    "httpx>=0.27",
+    "numpy>=1.26",
+    "fastapi>=0.110",
+    "uvicorn>=0.34",     # <0.34 uses the legacy websockets impl, which breaks on websockets>=14
+    "wsproto>=1.2",      # the WS backend uvicorn actually uses (see engine/api/main.py) —
+                         # version-stable, unlike the uvicorn<->websockets compatibility dance
+    "websockets>=13",    # client-side only (scripts/run_ws_client.py, check_end_to_end.py)
+]
+
+[project.optional-dependencies]
+# Cloud parser/scorer fallback path. Not required — without a key the
+# routing provider uses the local qwen3:8b fallback instead.
+groq = ["groq>=1.0"]
+# Steps 2-3 (VAD + STT + TTS). The engine imports these lazily, so the
+# text-only turn loop and `pytest -m "not slow"` run without them.
+speech = [
+    "torch>=2.0",
+    "torchaudio>=2.0",
+    "faster-whisper>=1.0",
+    "kokoro>=0.9",
+    "soundfile>=0.12",
+    "sounddevice>=0.4",
+]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[tool.setuptools]
+packages = [
+    "engine",
+    "engine.schemas",
+    "engine.inference",
+    "engine.orchestrator",
+    "engine.speech",
+    "engine.agents",
+    "engine.policy",
+    "engine.retrieval",
+    "engine.transport",
+    "engine.api",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = [
+    "slow: loads real model weights (Silero / faster-whisper). Run with -m slow.",
+]
+addopts = "-m 'not slow'"

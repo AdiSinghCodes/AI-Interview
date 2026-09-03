@@ -1,0 +1,154 @@
+# ============================================================================
+# THE SINGLE SOURCE OF TRUTH FOR EVERY MODEL IN THE INTERVIEW ENGINE
+# ============================================================================
+# Rule (NTRVSTA Phase 2 plan, p8): no model name, size, device, or fallback
+# chain appears anywhere else in the codebase. Swapping a model = editing this
+# file. Nothing else.
+#
+# engine/settings.py loads this into typed pydantic specs at boot and fails
+# loudly on a malformed entry — a silent shape mismatch here would otherwise
+# only surface mid-interview.
+# ============================================================================
+
+# --- JSON schemas the interviewer/parser/scorer responses must validate against.
+# Referenced by name from a role's `json_schema:` key. Keeping them here (not in
+# code) means a prompt-contract change is also a config-only edit.
+schemas:
+  answer_v1:
+    type: object
+    properties:
+      answer:
+        type: string
+    required: [answer]
+
+roles:
+
+  # -- LIVE LATENCY PATH -----------------------------------------------------
+  # qwen3:4b @ ~2.6GB leaves real headroom on the 6GB card. think:false + the
+  # answer_v1 schema is the structural fix for prose-leak: a monologue cannot
+  # validate against {"answer": "..."}. keep_alive:-1 is non-negotiable — a
+  # cold reload is 15-20s mid-turn.
+  interviewer:
+    provider: ollama
+    primary:
+      name: qwen3:4b
+      think: false
+      keep_alive: -1
+      json_schema: answer_v1
+      num_ctx: 4096
+      temperature: 0.3
+      max_tokens: 200
+    fallbacks:
+      # No `think` key — phi4-mini has no thinking mode and 400s if sent one
+      # (the bug Phase 0.2 test 11 caught). Only send `think` when it's set here.
+      - name: phi4-mini
+        keep_alive: -1
+        json_schema: answer_v1
+        num_ctx: 4096
+        temperature: 0.3
+        max_tokens: 200
+      - name: llama3.2:3b
+        keep_alive: -1
+        json_schema: answer_v1
+        num_ctx: 4096
+        temperature: 0.3
+        max_tokens: 200
+    max_vram_mb: 4200
+
+  # -- PRE-INTERVIEW (runs before the interviewer LLM loads; VRAM is free) --
+  planner:
+    provider: ollama
+    primary:
+      name: qwen3:8b
+      format: json
+      num_ctx: 8192
+      temperature: 0.8
+      max_tokens: 4096
+    unload_before_session: true   # ~5.2GB — must be evicted before the call starts
+
+  # -- OFF THE LIVE PATH: Groq-first, local fallback (plan p4) --------------
+  # parser runs pre-interview, scorer runs post-interview, so VRAM is free
+  # both times. A Groq 429 degrades to the local model instead of breaking
+  # the session. With ENGINE_GROQ_API_KEY unset, the fallback is used directly.
+  parser:
+    provider: groq
+    primary:
+      name: llama-3.1-8b-instant
+      response_format: json_object
+      temperature: 0.2
+      max_tokens: 2048
+    fallbacks:
+      - name: qwen3:8b
+        provider: ollama
+        format: json
+        num_ctx: 8192
+        temperature: 0.2
+        max_tokens: 2048
+
+  scorer:
+    provider: groq
+    primary:
+      name: openai/gpt-oss-20b
+      response_format: json_object
+      temperature: 0.3
+      max_tokens: 2048
+    fallbacks:
+      - name: qwen3:8b
+        provider: ollama
+        format: json
+        num_ctx: 8192
+        temperature: 0.3
+        max_tokens: 2048
+
+  # -- RETRIEVAL ----------------------------------------------------------
+  # No alternative: Groq has no embeddings API. dim MUST match the pgvector
+  # column width or retrieval silently breaks instead of erroring.
+  embedder:
+    provider: ollama
+    primary:
+      name: nomic-embed-text
+      dim: 768
+
+# --- SPEECH ------------------------------------------------------------------
+stt:
+  engine: faster-whisper
+  model: base.en          # ~4x faster than distil-small.en on CPU; accuracy still solid for a live turn
+  device: cpu             # GPU path needs cublas64_12.dll (absent); CPU keeps all 6GB for the LLM
+  compute_type: int8
+
+tts:
+  engine: kokoro
+  voice: af_heart
+  lang_code: a           # American English
+  emit_visemes: true     # phoneme + duration out, for the avatar viseme timeline
+  enabled: true          # ENGINE_TTS_ENABLED=false forces SilenceTTS (CI / no Kokoro)
+
+vad:
+  engine: silero
+  sample_rate: 16000
+  speech_threshold: 0.5
+  # ~1s of silence = the candidate has actually finished a thought. 8 frames
+  # (~250ms) chopped multi-sentence answers into separate turns and cut people
+  # off when they paused to think. Largest single latency lever — tune here.
+  endpoint_silent_frames: 32  # ~1.0s at 32ms/frame
+
+# --- AVATAR ----------------------------------------------------------------
+avatar:
+  live:
+    engine: threejs_mesh          # browser GPU, zero VRAM on this card
+    glb: public/models/interviewer.glb
+  offline:
+    engine: musetalk               # v2 only — pre-rendered clips, NEVER on the live path
+    enabled: false
+
+# --- LATENCY BUDGET (plan p7) — the orchestrator's degrade-ladder triggers ---
+latency_budget_ms:
+  vad_endpoint:        [200, 300]
+  stt_finalise:        [150, 350]
+  context_retrieval:   [20, 50]
+  llm_ttft:            [120, 300]
+  first_clause_tts:    [200, 400]
+  transport_playback:  [50, 100]
+  cache_miss_total:    [700, 1100]
+  cache_hit_total:     [250, 350]
+  danger_line:         1500        # TTFT p95 above this → trigger the degrade ladder

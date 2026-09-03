@@ -1,0 +1,65 @@
+:root {
+  --bg: #0b1120;
+  --panel: #111a2e;
+  --panel-2: #16223c;
+  --line: #22314f;
+  --ink: #e8edf7;
+  --ink-dim: #93a1bd;
+  --accent: #38bdf8;
+  --accent-2: #818cf8;
+  --good: #34d399;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at top, #13203a 0%, var(--bg) 60%);
+  color: var(--ink);
+  min-height: 100vh;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 0.7rem 1.3rem;
+  background: var(--panel-2);
+  color: var(--ink);
+  transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+}
+button:hover:not(:disabled) { background: #1d2c4d; border-color: var(--accent); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+button.primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: none;
+  color: #08111f;
+  font-weight: 700;
+}
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+h1 { font-size: clamp(1.6rem, 3vw, 2.3rem); margin: 0 0 0.5rem; }
+h2 { font-size: 1.15rem; margin: 0 0 1rem; }
+.dim { color: var(--ink-dim); }
+.kicker {
+  font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 0.6rem;
+}

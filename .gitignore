@@ -1,29 +1,113 @@
-# Node & Dependencies
-node_modules/
-dist/
-build/
-.cache/
+# ==============================================================================
+#  AI-Interview — root .gitignore
+#  Per-subproject .gitignore files (Phase 0.1/, Interview Engine/, Phase 1/
+#  frontend/) still apply on top of this one.
+# ==============================================================================
 
-# Python & Virtual Environments
+# --- Python bytecode & caches -------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+.ipynb_checkpoints/
+
+# --- Virtual environments ----------------------------------------------------
+myenv/
 venv/
 .venv/
 env/
-.env
-myenv/
+ENV/
+.python-version
 
-# IDE & Editor files
+# --- Packaging / build output ----------------------------------------------
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# --- Environment & secrets -------------------------------------------------
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+hf_token*
+.hf_token
+
+# --- Test / coverage artifacts -------------------------------------------
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# --- Node / frontend (Phase 1/frontend) ----------------------------------
+node_modules/
+.cache/
+.parcel-cache/
+.vite/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Editors & IDEs -----------------------------------------------------
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# OS files
+# --- OS junk ----------------------------------------------------------
 .DS_Store
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
-# Logs & Temporary files
+# --- Logs & scratch --------------------------------------------------
 *.log
+logs/
 scratch/
+scratchpad/
+tmp/
+*.tmp
+
+# ==============================================================================
+#  ML model weights — download/generate locally, never commit
+#  (NOTE: models/ is NOT ignored — it is a Python package in Phase 1/backend)
+# ==============================================================================
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.safetensors
+*.gguf
+*.bin
+*.h5
+*.tflite
+*.caffemodel
+checkpoints/
+weights/
+pretrained/
+pretrained_models/
+*.zip
+
+# ==============================================================================
+#  Generated media / run artifacts
+# ==============================================================================
+media/
+reply.wav
+tts_output/
+avatar_output/
+*_output/
+outputs/
+runs/
+mediapipe_screenshot_*.jpg

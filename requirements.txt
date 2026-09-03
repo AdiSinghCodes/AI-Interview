@@ -1,0 +1,61 @@
+# ==============================================================================
+#  AI-Interview — aggregated Python requirements (Python 3.11)
+#
+#  This is a convenience superset covering every Python subproject in the repo.
+#  Each subproject also ships a narrower list you can install on its own:
+#    Interview Engine/pyproject.toml            (pip install -e ".[groq,speech,dev]")
+#    Phase 1/backend/requirements.txt
+#    Phase 0/voice_clarity_detection/requirements.txt
+#    Phase 0.1/testingpretrainedmodels/         (python install_deps.py)
+#    Procturing In AI-Interview/requirements.txt
+#
+#  The Phase 1 frontend is Node, not Python — see Phase 1/frontend/package.json.
+#
+#  Heavy GPU packages (torch, torchaudio) install the default CPU/CUDA wheel.
+#  For a specific CUDA build, install torch first from https://pytorch.org.
+# ==============================================================================
+
+# --- Core numerics / vision -------------------------------------------------
+numpy>=1.26,<2                 # <2 for opencv 4.8.x / mediapipe compatibility
+opencv-python==4.8.1.78
+Pillow>=10.0
+
+# --- Web / API layer (Interview Engine, Phase 1 backend) -------------------
+fastapi>=0.110
+uvicorn[standard]>=0.34        # <0.34 uses the legacy websockets impl
+wsproto>=1.2
+websockets>=13
+starlette>=0.37
+python-multipart>=0.0.6
+aiofiles>=23.2
+httpx>=0.27
+pydantic>=2.5
+pydantic-settings>=2.0
+pyyaml>=6.0
+python-dotenv>=1.0
+
+# --- LLM inference --------------------------------------------------------
+groq>=1.0                      # optional Groq path for parser/scorer roles
+
+# --- Speech: STT / TTS / VAD -------------------------------------------
+torch>=2.0
+torchaudio>=2.0
+faster-whisper>=1.0
+silero-vad>=5.1
+kokoro>=0.9                    # Interview Engine TTS
+edge-tts>=6.1                  # Phase 1 backend TTS
+soundfile>=0.12
+sounddevice>=0.4
+
+# --- Proctoring vision models (Phase 0.1, Phase 1 backend) ------------
+ultralytics>=8.0              # YOLOv8 person/object detection
+mediapipe>=0.10               # face mesh / pose / gaze
+insightface>=0.7              # face recognition
+onnxruntime>=1.16             # insightface CPU inference backend
+
+# --- Speaker diarization (Phase 0.1 test_07, optional, needs HF token) --
+pyannote.audio>=3.1
+
+# --- Dev / test -------------------------------------------------------
+pytest>=8.0
+pytest-asyncio>=0.23
