@@ -626,6 +626,7 @@ EVALUATION RULES:
 13. Set endInterview=true only when the answer/history indicates the interview
     should end, not merely because the answer is weak.
 14. Do not mention RAG, embeddings or internal retrieval to the candidate.
+15. If the candidate explicitly states they do not know, pass, or cannot answer (e.g. "I don't know", "no idea", "idk", "pass"), set followUp=false to allow moving cleanly to the next question.
 
 Return ONLY valid JSON:
 {{
@@ -680,3 +681,6 @@ Return ONLY valid JSON:
 
     # Keep the response compatible with the existing controller.
     return result
+
+
+from bank_generator import generate_question_bank

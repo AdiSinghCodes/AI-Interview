@@ -21,3 +21,5 @@ exports.transcribe = async (buffer, filename, mimeType) => {
   });
   return response.data;
 };
+
+exports.generateQuestionBank = (payload) => agent('/generate-bank', payload);

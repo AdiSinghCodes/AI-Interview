@@ -21,6 +21,7 @@ interface Question {
   category: string
   text: string
   ariaIntro: string
+  difficultyTier?: 'Easy' | 'Medium' | 'Hard'
   section?: QType
   problem?: any
   constraints?: any[]
@@ -35,6 +36,9 @@ interface Props {
 }
 
 const normaliseType = (q: any): QType => {
+  const rawType = String(q?.type || q?.section || '').toLowerCase()
+  if (rawType === 'coding') return 'coding'
+  if (rawType === 'sql') return 'sql'
   const raw = String(q?.section || q?.type || q?.questionType || '').toLowerCase()
   if (/sql|database/.test(raw)) return 'sql'
   if (/coding|dsa|program/.test(raw)) return 'coding'
@@ -44,6 +48,21 @@ const normaliseType = (q: any): QType => {
 const normaliseQuestion = (raw: any, id: number): Question => {
   const type = normaliseType(raw)
   const text = String(raw?.text || raw?.question || raw?.prompt || raw?.content || 'Please introduce yourself.')
+  
+  let difficultyTier: 'Easy' | 'Medium' | 'Hard' = 'Easy'
+  const rawTier = String(raw?.difficultyTier || raw?.difficulty_tier || raw?.tier || '').toLowerCase()
+  if (rawTier === 'easy' || rawTier === 'beginner') {
+    difficultyTier = 'Easy'
+  } else if (rawTier === 'medium' || rawTier === 'intermediate') {
+    difficultyTier = 'Medium'
+  } else if (rawTier === 'hard' || rawTier === 'advanced') {
+    difficultyTier = 'Hard'
+  } else {
+    if (id <= 3) difficultyTier = 'Easy'
+    else if (id <= 8) difficultyTier = 'Medium'
+    else difficultyTier = 'Hard'
+  }
+
   return {
     id,
     type,
@@ -51,6 +70,7 @@ const normaliseQuestion = (raw: any, id: number): Question => {
     category: String(raw?.category || (type === 'sql' ? 'SQL / Database' : type === 'coding' ? 'Coding / DSA' : 'Domain Interview')),
     text,
     ariaIntro: text,
+    difficultyTier,
     problem: raw?.problem || null,
     constraints: Array.isArray(raw?.constraints) ? raw.constraints : [],
     examples: Array.isArray(raw?.examples) ? raw.examples : [],
@@ -370,6 +390,9 @@ const [setup] = useState<any>(() => {
   const [questions, setQuestions] = useState<Question[]>([])
   const [qIndex, setQIndex] = useState(0)
   const [seconds, setSeconds] = useState(0)
+  const [isPrepPhase, setIsPrepPhase] = useState(true)
+  const [prepCountdown, setPrepCountdown] = useState(30)
+  const preloadedRef = useRef<any>(null)
   const [completedQs, setCompletedQs] = useState<Set<number>>(new Set())
   const [workspaceOpen, setWorkspaceOpen] = useState<'coding' | 'sql' | null>(null)
   const [isMuted, setIsMuted] = useState(false)
@@ -447,6 +470,71 @@ const [setup] = useState<any>(() => {
     return () => window.clearInterval(timer)
   }, [])
 
+    // 30-second Pre-loading Onboarding Countdown
+  useEffect(() => {
+    if (!isPrepPhase) return
+    const prepTimer = window.setInterval(() => {
+      setPrepCountdown(prev => {
+        if (prev <= 1) {
+          window.clearInterval(prepTimer)
+          setIsPrepPhase(false)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => window.clearInterval(prepTimer)
+  }, [isPrepPhase])
+
+  // Trigger Q1 when 30s prep phase finishes and preloaded data is ready
+  useEffect(() => {
+    if (!isPrepPhase && questions.length === 0) {
+      const activateQ1 = (started: any) => {
+        if (!started) return
+        setInterviewId(String(started.interviewId))
+        setPlan(started.plan || null)
+
+        const bank = Array.isArray(started.questionBank) && started.questionBank.length > 0
+          ? started.questionBank.map((q: any, idx: number) => normaliseQuestion(q, idx + 1))
+          : [normaliseQuestion(started.question, 1)]
+
+        setQuestions(bank)
+        setQIndex(0)
+        setTranscript([
+          {
+            speaker: 'ARIA',
+            text: bank[0].ariaIntro,
+          },
+        ])
+        setStatus('ARIA is starting the interview...')
+        console.log('🎉 30s prep finished! Activating and speaking Q1:', bank[0].text)
+        window.setTimeout(() => {
+          speakQuestion(bank[0].text, bank[0].type)
+        }, 400)
+      }
+
+      if (preloadedRef.current) {
+        activateQ1(preloadedRef.current)
+      } else {
+        console.log('⏳ Preloaded ref not ready at 30s mark yet. Awaiting startAIInterview completion...')
+        const checkInterval = window.setInterval(() => {
+          if (preloadedRef.current) {
+            window.clearInterval(checkInterval)
+            activateQ1(preloadedRef.current)
+          }
+        }, 300)
+      }
+    }
+  }, [isPrepPhase, questions.length])
+
+  // AUTOMATICALLY OPEN CODING / SQL WORKSPACE PORTAL WHEN CODING OR SQL QUESTION IS ACTIVE
+  useEffect(() => {
+    if (currentQ?.type === 'coding' || currentQ?.type === 'sql') {
+      console.log(`🚀 Auto-opening ${currentQ.type.toUpperCase()} workspace portal for question #${currentQ.id}`)
+      setWorkspaceOpen(currentQ.type)
+    }
+  }, [currentQ?.id, currentQ?.type])
+
 async function startAIInterview() {
   if (aiStartRef.current) {
     console.log('ℹ️ AI interview already started/starting — skipping duplicate.')
@@ -488,30 +576,12 @@ async function startAIInterview() {
       throw new Error('AI interviewer did not return the first question.')
     }
 
+    // Pre-load question bank data into ref - DO NOT RENDER OR SPEAK ANY QUESTION DURING INITIAL 30-SECOND PREPARATION PHASE!
+    preloadedRef.current = started
     setInterviewId(String(started.interviewId))
     setPlan(started.plan || null)
-
-    const first = normaliseQuestion(started.question, 1)
-
-    console.log('🎤 FIRST QUESTION:', first.text)
-    console.log('🧩 QUESTION TYPE:', first.type)
-
-    setQuestions([first])
-    setQIndex(0)
-
-    setTranscript([
-      {
-        speaker: 'ARIA',
-        text: first.ariaIntro,
-      },
-    ])
-
-    setStatus('ARIA is preparing the question…')
-
-    // Speak the question first. The candidate microphone starts only after ARIA finishes.
-    window.setTimeout(() => {
-      speakQuestion(first.text, first.type)
-    }, 400)
+    setStatus('Pre-loading AI interviewer & 15-question bank in backend (0-30s)...')
+    console.log('✅ Question bank pre-loaded in backend successfully! Waiting for 30s prep countdown to reach 0 before asking Q1.')
 
   } catch (error: any) {
     console.error('❌ AI INTERVIEW START FAILED:', error)
@@ -714,7 +784,7 @@ async function startAIInterview() {
 
   // Keep the ARIA animation tied to the actual speech engine, not a fake timer.
   useEffect(() => {
-    const waveInterval = window.setInterval(() => {
+    const waveInterval = globalThis.setInterval(() => {
       if (isAriaSpeaking || isListening) {
         setAudioWave(() => Array.from({ length: 12 }, () => Math.floor(Math.random() * 7 + 3)))
       } else {
@@ -737,7 +807,7 @@ async function startAIInterview() {
       console.warn('Speech synthesis is not supported by this browser.')
       setIsAriaSpeaking(false)
       if (type === 'verbal') {
-        window.setTimeout(() => void startAnswerRecording(), 250)
+        (window as any).setTimeout(() => void startAnswerRecording(), 250)
       }
       return
     }
@@ -1031,11 +1101,17 @@ async function startAIInterview() {
 
       setEvaluation(result.evaluation || null)
       setCompletedQs(prev => new Set([...prev, currentQ.id]))
-      setTranscript(prev => [
-        ...prev,
-        { speaker: 'You', text: answer || (section === 'coding' ? '[Coding submission]' : '[SQL submission]') },
-        { speaker: 'ARIA', text: result.nextQuestion ? (result.nextQuestion.text || result.nextQuestion.question || result.nextQuestion) : 'Thank you. That completes the interview.' },
-      ])
+      // Append 'You' text ONLY if not already added by handleVerbalAnswer
+      setTranscript(prev => {
+        const lastEntry = prev[prev.length - 1];
+        const alreadyHasUserAnswer = lastEntry && lastEntry.speaker === 'You' && lastEntry.text === answer;
+        const newEntries = [];
+        if (!alreadyHasUserAnswer) {
+          newEntries.push({ speaker: 'You', text: answer || (section === 'coding' ? '[Coding submission]' : '[SQL submission]') });
+        }
+        newEntries.push({ speaker: 'ARIA', text: result.nextQuestion ? (result.nextQuestion.text || result.nextQuestion.question || result.nextQuestion) : 'Thank you. That completes the interview.' });
+        return [...prev, ...newEntries];
+      })
 
       if (result.done) {
         await finishInterview()
@@ -1420,7 +1496,117 @@ async function startAIInterview() {
                 flexShrink: 0,
               }}
             >
-              {/* ARIA - AI Interviewer */}
+              {/* 30-SECOND PRE-LOADING & PREPARATION OVERLAY */}
+            {isPrepPhase && (
+              <div
+                style={{
+                  gridColumn: '1 / -1',
+                  background: 'linear-gradient(135deg, #0d0d1a, #1a1a2e)',
+                  borderRadius: isMobile ? '10px' : '14px',
+                  minHeight: isMobile ? '180px' : '280px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: isMobile ? '16px' : '24px',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  border: '1px solid rgba(124,58,237,0.3)',
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.4)',
+                }}
+              >
+                <div
+                  style={{
+                    width: isMobile ? '48px' : '64px',
+                    height: isMobile ? '48px' : '64px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 0 30px rgba(124,58,237,0.5)',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <BotAvatarIcon size={isMobile ? 24 : 32} color="#fff" />
+                </div>
+
+                <h3
+                  style={{
+                    fontSize: isMobile ? '15px' : '18px',
+                    fontWeight: 700,
+                    fontFamily: 'Outfit, sans-serif',
+                    color: '#ffffff',
+                    margin: '0 0 6px 0',
+                  }}
+                >
+                  ARIA Pre-loading AI Interview Question Bank...
+                </h3>
+
+                <p
+                  style={{
+                    fontSize: isMobile ? '11px' : '13px',
+                    color: '#a0a0c0',
+                    maxWidth: '460px',
+                    margin: '0 0 16px 0',
+                    textAlign: 'center',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Loading domain questions (Easy, Medium, Hard, Pseudocode & Coding) into backend session. Your interview begins in 30 seconds.
+                </p>
+
+                {/* COUNTDOWN TIMER */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                  <div
+                    style={{
+                      background: 'rgba(124,58,237,0.15)',
+                      padding: '6px 18px',
+                      borderRadius: '100px',
+                      border: '1px solid rgba(124,58,237,0.4)',
+                      color: '#a78bfa',
+                      fontWeight: 800,
+                      fontSize: isMobile ? '16px' : '20px',
+                      fontFamily: 'JetBrains Mono, monospace',
+                    }}
+                  >
+                    00:{prepCountdown < 10 ? `0${prepCountdown}` : prepCountdown}
+                  </div>
+                </div>
+
+                {/* PROGRESS BAR */}
+                <div
+                  style={{
+                    width: '100%',
+                    maxWidth: '360px',
+                    height: '6px',
+                    background: 'rgba(255,255,255,0.08)',
+                    borderRadius: '100px',
+                    overflow: 'hidden',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${((30 - prepCountdown) / 30) * 100}%`,
+                      background: 'linear-gradient(90deg, #7c3aed, #10b981)',
+                      transition: 'width 1s linear',
+                    }}
+                  />
+                </div>
+
+                <div style={{ fontSize: isMobile ? '10px' : '11px', color: '#6a6a8a', fontFamily: 'Inter, sans-serif' }}>
+                  {prepCountdown > 20
+                    ? '⚡ [1/3] Initializing Camera & Proctoring Feeds...'
+                    : prepCountdown > 10
+                      ? '⚡ [2/3] Pre-loading 15-Question Bank from Groq LLM Backend...'
+                      : '⚡ [3/3] Finalizing Session & Voice Synthesis Model...'}
+                </div>
+              </div>
+            )}
+
+            {/* ARIA - AI Interviewer */}
               <div
                 className="video-panel"
                 style={{
@@ -1637,6 +1823,40 @@ async function startAIInterview() {
                   >
                     {typeIcon[currentQ.type]} {currentQ.category}
                   </span>
+                  {currentQ.difficultyTier && (
+                    <span
+                      style={{
+                        fontSize: isMobile ? '9px' : '10px',
+                        padding: '2px 8px',
+                        borderRadius: '100px',
+                        fontWeight: 600,
+                        background:
+                          currentQ.difficultyTier === 'Easy'
+                            ? '#ecfdf5'
+                            : currentQ.difficultyTier === 'Medium'
+                            ? '#fffbeb'
+                            : '#fef2f2',
+                        color:
+                          currentQ.difficultyTier === 'Easy'
+                            ? '#059669'
+                            : currentQ.difficultyTier === 'Medium'
+                            ? '#d97706'
+                            : '#dc2626',
+                        border:
+                          currentQ.difficultyTier === 'Easy'
+                            ? '1px solid #a7f3d0'
+                            : currentQ.difficultyTier === 'Medium'
+                            ? '1px solid #fde68a'
+                            : '1px solid #fecaca',
+                      }}
+                    >
+                      {currentQ.difficultyTier === 'Easy'
+                        ? '🌱 Easy'
+                        : currentQ.difficultyTier === 'Medium'
+                        ? '⚡ Medium'
+                        : '🔥 Hard'}
+                    </span>
+                  )}
                 </div>
 
                 <p
@@ -1671,7 +1891,7 @@ async function startAIInterview() {
                     {currentQ.type === 'coding' ? '⌨️' : '🗄️'} {currentQ.type === 'coding' ? 'Coding' : 'SQL'} ready
                   </span>
                   <button
-                    onClick={() => setWorkspaceOpen(currentQ.type)}
+                    onClick={() => setWorkspaceOpen(currentQ.type === 'sql' ? 'sql' : 'coding')}
                     className="workspace-btn"
                     style={{
                       padding: isMobile ? '5px 12px' : '8px 18px',
@@ -2151,7 +2371,7 @@ async function startAIInterview() {
           <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '4px' : '12px', justifySelf: 'end' }}>
             {isPractical && !isCompleted && (
               <button
-                onClick={() => setWorkspaceOpen(currentQ.type)}
+                onClick={() => setWorkspaceOpen(currentQ.type === 'sql' ? 'sql' : 'coding')}
                 style={{
                   padding: isMobile ? '4px 10px' : '8px 18px',
                   borderRadius: '100px',
@@ -2553,7 +2773,7 @@ const initialCode =
                     overflow: 'hidden',
                   }}
                 >
-                  {code.split('\n').map((_, i) => (
+                  {code.split('\n').map((_: any, i: number) => (
                     <div
                       key={i}
                       style={{
@@ -2734,7 +2954,7 @@ function SQLWorkspace({
   onSubmit: (submission: any) => void
   onClose: () => void
 }) {
-  const initialSql = question?.problem?.starterCode?.sql || `-- Find average salary by department (only depts with > 10 employees)
+  const initialSql = question?.problem?.starterCode?.sql || `-- Write your SQL query below:
 SELECT
   d.name AS department,
   ROUND(AVG(e.salary), 2) AS avg_salary,
@@ -2742,10 +2962,9 @@ SELECT
 FROM employees e
 JOIN departments d ON e.department_id = d.id
 GROUP BY d.id, d.name
-HAVING COUNT(e.id) > 10
+HAVING COUNT(e.id) > 5
 ORDER BY avg_salary DESC;`
   const [query, setQuery] = useState(initialSql)
-
   const [ran, setRan] = useState(false)
 
   const schema = Array.isArray(question?.problem?.dbSchema)
@@ -2760,7 +2979,6 @@ ORDER BY avg_salary DESC;`
     { department: 'Engineering', avg_salary: '142,500', headcount: 48 },
     { department: 'Product', avg_salary: '128,300', headcount: 22 },
     { department: 'Design', avg_salary: '118,700', headcount: 15 },
-    { department: 'Marketing', avg_salary: '98,400', headcount: 31 },
   ]
 
   return (
@@ -2790,14 +3008,13 @@ ORDER BY avg_salary DESC;`
               animation: 'slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
             }
             : {
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: '94%',
-              maxWidth: '1200px',
-              height: '88vh',
-              borderRadius: '16px',
-              animation: 'scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '78vh',
+              borderTopLeftRadius: '20px',
+              borderTopRightRadius: '20px',
+              animation: 'slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
             }),
           background: '#FAF9F5',
           zIndex: 90,
@@ -2805,7 +3022,6 @@ ORDER BY avg_salary DESC;`
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          paddingBottom: isMobile ? 'env(safe-area-inset-bottom)' : '0',
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -2825,7 +3041,7 @@ ORDER BY avg_salary DESC;`
               style={{
                 width: '24px',
                 height: '24px',
-                background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                 borderRadius: '5px',
                 display: 'flex',
                 alignItems: 'center',
@@ -2836,10 +3052,10 @@ ORDER BY avg_salary DESC;`
                 fontFamily: 'Outfit, sans-serif',
               }}
             >
-              V
+              SQL
             </div>
             <span style={{ fontWeight: 600, fontSize: isMobile ? '13px' : '15px', color: '#1a1a2e', fontFamily: 'Outfit, sans-serif' }}>
-              SQL
+              SQL Workspace
             </span>
           </div>
           <button
@@ -2856,16 +3072,6 @@ ORDER BY avg_salary DESC;`
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'all 0.15s',
-              touchAction: 'manipulation',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(239,68,68,0.08)'
-              e.currentTarget.style.color = '#ef4444'
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.color = '#6a6a8a'
             }}
           >
             ✕
@@ -2878,7 +3084,7 @@ ORDER BY avg_salary DESC;`
               flex: 1,
               display: isMobile ? 'flex' : 'grid',
               flexDirection: isMobile ? 'column' : undefined,
-              gridTemplateColumns: isMobile ? undefined : '160px 1fr',
+              gridTemplateColumns: isMobile ? undefined : '180px 1fr',
               overflow: 'hidden',
             }}
           >
@@ -2894,12 +3100,12 @@ ORDER BY avg_salary DESC;`
                 <div style={{ fontSize: '9px', fontWeight: 600, color: '#8a8aa8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
                   Schema
                 </div>
-                {schema.map(tbl => (
+                {schema.map((tbl: any) => (
                   <div key={tbl.name} style={{ marginBottom: '8px' }}>
                     <div style={{ fontWeight: 600, fontSize: '10px', color: '#1a1a2e', marginBottom: '2px' }}>
-                      🗄️ {tbl.name}
+                      📊 {tbl.name}
                     </div>
-                    {tbl.cols.map(col => (
+                    {tbl.cols.map((col: any) => (
                       <div key={col} style={{ fontSize: '9px', color: '#6a6a8a', paddingLeft: '8px', lineHeight: 1.5 }}>
                         {col}
                       </div>
@@ -2910,81 +3116,47 @@ ORDER BY avg_salary DESC;`
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              {isMobile && (
-                <div
-                  style={{
-                    padding: '6px 8px',
-                    borderBottom: '1px solid rgba(0,0,0,0.06)',
-                    overflowX: 'auto',
-                    background: '#FAF9F5',
-                    flexShrink: 0,
-                    display: 'flex',
-                    gap: '10px',
-                  }}
-                >
-                  {schema.map(tbl => (
-                    <div key={tbl.name} style={{ flexShrink: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: '10px', color: '#1a1a2e' }}>🗄️ {tbl.name}</div>
-                      {tbl.cols.map(col => (
-                        <div key={col} style={{ fontSize: '9px', color: '#6a6a8a' }}>{col}</div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
-
               <div
                 style={{
+                  flex: 1,
                   display: 'grid',
-                  gridTemplateColumns: isMobile ? '24px 1fr' : '28px 1fr',
+                  gridTemplateColumns: isMobile ? '26px 1fr' : '30px 1fr',
                   overflow: 'hidden',
                   background: '#0d0d1a',
-                  minHeight: isMobile ? '80px' : '120px',
-                  flexShrink: 0,
                 }}
               >
                 <div
                   style={{
-                    padding: isMobile ? '4px 0' : '8px 0',
+                    padding: '10px 0',
                     textAlign: 'right',
-                    paddingRight: isMobile ? '3px' : '4px',
+                    paddingRight: '6px',
                     background: 'rgba(0,0,0,0.3)',
                     userSelect: 'none',
-                    overflow: 'hidden',
+                    color: 'rgba(255,255,255,0.25)',
+                    fontSize: '11px',
+                    fontFamily: 'JetBrains Mono, monospace',
                   }}
                 >
-                  {query.split('\n').map((_, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        fontFamily: 'JetBrains Mono, monospace',
-                        fontSize: isMobile ? '13px' : '10px',
-                        lineHeight: '1.6',
-                        color: 'rgba(255,255,255,0.12)',
-                      }}
-                    >
-                      {i + 1}
-                    </div>
+                  {query.split('\n').map((_: any, i: number) => (
+                    <div key={i}>{i + 1}</div>
                   ))}
                 </div>
                 <textarea
                   value={query}
                   onChange={e => setQuery(e.target.value)}
+                  placeholder="-- Write your SQL query here..."
                   style={{
+                    width: '100%',
+                    height: '100%',
+                    padding: '10px 12px',
                     background: 'transparent',
                     border: 'none',
                     outline: 'none',
+                    color: '#e2e8f0',
+                    fontSize: '12px',
                     fontFamily: 'JetBrains Mono, monospace',
-                    fontSize: isMobile ? '16px' : '10px',
-                    lineHeight: '1.6',
-                    color: '#a5b4fc',
-                    padding: isMobile ? '4px 0 4px 4px' : '8px 0 8px 6px',
+                    lineHeight: 1.6,
                     resize: 'none',
-                    width: '100%',
-                    height: '100%',
-                    caretColor: '#f59e0b',
-                    minHeight: isMobile ? '60px' : '80px',
-                    WebkitAppearance: 'none',
                   }}
                 />
               </div>
@@ -2992,69 +3164,34 @@ ORDER BY avg_salary DESC;`
               <div
                 style={{
                   borderTop: '1px solid rgba(0,0,0,0.06)',
-                  padding: isMobile ? '4px 8px' : '6px 12px',
-                  flex: 1,
-                  overflow: 'auto',
+                  padding: '6px 12px',
                   background: '#FAF9F5',
-                  minHeight: isMobile ? '50px' : 'auto',
+                  maxHeight: '120px',
+                  overflowY: 'auto',
                 }}
               >
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                  <span style={{ fontSize: isMobile ? '11px' : '10px', fontWeight: 600, color: '#8a8aa8' }}>Results</span>
-                  {ran && (
-                    <>
-                      <span style={{ fontSize: isMobile ? '11px' : '10px', color: '#10b981' }}>✓ {results.length} rows</span>
-                      <span style={{ fontSize: isMobile ? '11px' : '10px', color: '#8a8aa8' }}>· 0.038s</span>
-                    </>
-                  )}
+                <div style={{ fontSize: '10px', fontWeight: 600, color: '#8a8aa8', marginBottom: '4px' }}>
+                  Query Output {ran && <span style={{ color: '#10b981' }}>✓ 4 rows returned</span>}
                 </div>
-                {ran ? (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: isMobile ? '13px' : '11px' }}>
-                      <thead>
-                        <tr>
-                          {Object.keys(results[0]).map(h => (
-                            <th
-                              key={h}
-                              style={{
-                                padding: isMobile ? '3px 6px' : '4px 8px',
-                                textAlign: 'left',
-                                color: '#8a8aa8',
-                                fontWeight: 600,
-                                borderBottom: '1px solid rgba(0,0,0,0.06)',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {h}
-                            </th>
-                          ))}
+                {ran && (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: 'JetBrains Mono, monospace' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(0,0,0,0.04)', textAlign: 'left' }}>
+                        <th style={{ padding: '3px 6px' }}>Department</th>
+                        <th style={{ padding: '3px 6px' }}>Avg Salary</th>
+                        <th style={{ padding: '3px 6px' }}>Headcount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {results.map((r, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                          <td style={{ padding: '3px 6px' }}>{r.department}</td>
+                          <td style={{ padding: '3px 6px' }}>${r.avg_salary}</td>
+                          <td style={{ padding: '3px 6px' }}>{r.headcount}</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {results.map((row, i) => (
-                          <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                            {Object.entries(row).map(([k, v]) => (
-                              <td
-                                key={k}
-                                style={{
-                                  padding: isMobile ? '3px 6px' : '4px 8px',
-                                  color: '#1a1a2e',
-                                  fontFamily: k === 'avg_salary' || k === 'headcount' ? 'JetBrains Mono, monospace' : 'Inter',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {v}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div style={{ color: '#8a8aa8', fontSize: isMobile ? '12px' : '12px', textAlign: 'center', padding: '8px 0' }}>
-                    Execute query
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
             </div>
@@ -3062,29 +3199,24 @@ ORDER BY avg_salary DESC;`
 
           <div
             style={{
-              padding: isMobile ? '6px 10px' : '8px 16px',
+              padding: '8px 16px',
               borderTop: '1px solid rgba(0,0,0,0.06)',
               display: 'flex',
-              gap: isMobile ? '4px' : '8px',
+              gap: '8px',
               justifyContent: 'flex-end',
-              flexShrink: 0,
               background: '#FAF9F5',
-              flexWrap: 'wrap',
             }}
           >
             <button
               onClick={onClose}
               style={{
-                padding: isMobile ? '6px 12px' : '8px 18px',
+                padding: '6px 16px',
                 borderRadius: '6px',
                 border: '1px solid rgba(0,0,0,0.08)',
                 background: '#fff',
                 color: '#1a1a2e',
                 cursor: 'pointer',
-                fontSize: isMobile ? '14px' : '12px',
-                fontFamily: 'Inter, sans-serif',
-                fontWeight: 500,
-                touchAction: 'manipulation',
+                fontSize: '12px',
               }}
             >
               Back
@@ -3092,36 +3224,31 @@ ORDER BY avg_salary DESC;`
             <button
               onClick={() => setRan(true)}
               style={{
-                padding: isMobile ? '6px 12px' : '8px 18px',
+                padding: '6px 16px',
                 borderRadius: '6px',
                 border: '1px solid rgba(0,0,0,0.08)',
                 background: '#fff',
                 color: '#1a1a2e',
                 cursor: 'pointer',
-                fontSize: isMobile ? '14px' : '12px',
-                fontFamily: 'Inter, sans-serif',
-                fontWeight: 500,
-                touchAction: 'manipulation',
+                fontSize: '12px',
               }}
             >
-              ▶ Execute
+              ▶ Run Query
             </button>
             <button
               onClick={() => onSubmit({ query })}
               style={{
-                padding: isMobile ? '6px 16px' : '8px 24px',
+                padding: '6px 20px',
                 borderRadius: '6px',
                 border: 'none',
                 background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                 color: '#fff',
                 cursor: 'pointer',
-                fontSize: isMobile ? '14px' : '12px',
-                fontFamily: 'Inter, sans-serif',
+                fontSize: '12px',
                 fontWeight: 600,
-                touchAction: 'manipulation',
               }}
             >
-              Submit →
+              Submit Query ➔
             </button>
           </div>
         </div>

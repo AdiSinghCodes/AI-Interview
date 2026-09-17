@@ -544,7 +544,11 @@ async function startServer() {
       console.log("⚡ Starting MongoDB In-Memory Server fallback...");
       try {
         const { MongoMemoryServer } = require("mongodb-memory-server");
-        const mongod = await MongoMemoryServer.create();
+        const mongod = await MongoMemoryServer.create({
+          instance: {
+            dbName: "viva_interview"
+          }
+        });
         const memoryUri = mongod.getUri();
         await mongoose.connect(memoryUri);
         console.log("✅ MongoDB connected via In-Memory Server at:", memoryUri);

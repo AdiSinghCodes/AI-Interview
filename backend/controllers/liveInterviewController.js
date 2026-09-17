@@ -1,3 +1,4 @@
+const { generateLocalQuestionBank, enrichQuestionBank } = require('../services/bankGenerator');
 const Interview = require('../models/Interview');
 const User = require('../models/User');
 const llm = require('../services/interviewLLMService');
@@ -603,58 +604,36 @@ exports.start =
       // Retry if Python 5100 hasn't started yet.
       // ------------------------------------------------------
 
-      let q;
-
+      // ------------------------------------------------------
+      // PRE-GENERATE 3-TIER QUESTION BANK (EASY -> MEDIUM -> HARD)
+      // ------------------------------------------------------
+      let questionBank = [];
       try {
-        q =
-          await callWithRetry(
-            () =>
-              llm.nextQuestion({
-                setup,
-                plan,
-                history: [],
-                questionIndex: 1,
-              }),
-            {
-              maxAttempts: 60,
-              delayMs: 1000,
-            }
-          );
-      } catch (error) {
-        // If the AI agent could not start,
-        // don't leave a useless active interview.
-        interview.status =
-          'cancelled';
-
-        await interview.save();
-
-        throw error;
-      }
-
-      if (
-        !q?.text &&
-        !q?.question
-      ) {
-        throw new Error(
-          'AI interviewer returned an empty first question.'
+        const bankRes = await callWithRetry(
+          () => llm.generateQuestionBank({ setup, plan }),
+          { maxAttempts: 5, delayMs: 1000 }
         );
+        if (Array.isArray(bankRes?.questions) && bankRes.questions.length > 0) {
+          questionBank = bankRes.questions;
+        }
+      } catch (bankErr) {
+        console.error('Python question bank endpoint warning, using local generator fallback:', bankErr?.message || bankErr);
       }
 
-      // ------------------------------------------------------
-      // RESPONSE
-      // ------------------------------------------------------
+      // ENFORCE PSEUDOCODE AND CODING/SQL WORKSPACE PROBLEMS FOR TECHNICAL INTERVIEWS
+      questionBank = enrichQuestionBank(questionBank, setup, plan);
+
+      const q = questionBank[0];
+
+      interview.questionBank = questionBank;
+      await interview.save();
 
       return res.json({
-        interviewId:
-          String(
-            interview._id
-          ),
-
+        interviewId: String(interview._id),
         setup,
-
         plan,
-
         question: q,
+        questionBank,
       });
     } catch (e) {
       console.error(
@@ -863,40 +842,30 @@ exports.answer =
       // SAVE ANSWER
       // ------------------------------------------------------
 
+      const isCrossQuestion = Boolean(
+        req.body.crossQuestion ||
+        req.body.questionPayload?.crossQuestion ||
+        req.body.questionType === 'cross_question' ||
+        req.body.questionPayload?.questionType === 'cross_question' ||
+        /cross-question|follow-up/i.test(req.body.questionPayload?.category || '') ||
+        /cross-question|follow-up/i.test(req.body.category || '')
+      );
+
       const savedAnswer = {
-        questionNumber:
-          interview.answers
-            .length + 1,
-
+        questionNumber: interview.answers.length + 1,
         section,
-
-        questionType:
-          result?.questionType ||
-          section,
-
+        questionType: isCrossQuestion ? 'cross_question' : (result?.questionType || section),
+        crossQuestion: isCrossQuestion,
         question,
-
-        questionPayload:
-          req.body
-            .questionPayload ||
-          null,
-
+        questionPayload: req.body.questionPayload || null,
         answer,
-
         transcript,
-
         codingSubmission,
-
         followUp,
-
         followUpReason,
-
         evaluation,
-
         score,
-
-        answeredAt:
-          new Date(),
+        answeredAt: new Date(),
       };
 
       interview.answers.push(
@@ -990,62 +959,57 @@ exports.answer =
       // CROSS QUESTION
       // ------------------------------------------------------
 
-      if (
-        followUp &&
-        (
-          result?.followUpQuestion ||
-          evaluation?.followUpQuestion
+      // ------------------------------------------------------
+      // NEXT QUESTION SELECTION (PREVENTS REPEATING QUESTION LOOPS)
+      // ------------------------------------------------------
+      // Count main (non-cross) questions answered so far
+      const mainQuestionsCount = interview.answers.filter(
+        a => a.questionType !== 'cross_question' && !a.crossQuestion
+      ).length;
+
+      // Check if previous question was ALREADY a cross-question
+      const lastAns = interview.answers[interview.answers.length - 1];
+      const lastWasCross = Boolean(
+        lastAns && (
+          lastAns.questionType === 'cross_question' || 
+          lastAns.crossQuestion || 
+          /cross-question|follow-up/i.test(lastAns.category || '')
         )
-      ) {
+      );
+
+      // Check if candidate explicitly opted out or said "I don't know"
+      const candidateOptedOut = /i don['’]?t know|no idea|idk|pass|don['’]?t know/i.test(answer);
+
+      // Allow at most ONE follow-up per main question, blocked if candidate opted out or last was cross
+      const allowFollowUp = Boolean(
+        followUp && 
+        !lastWasCross && 
+        !candidateOptedOut && 
+        (result?.followUpQuestion || evaluation?.followUpQuestion)
+      );
+
+      if (allowFollowUp) {
+        const currentTier = (Array.isArray(interview.questionBank) && interview.questionBank[mainQuestionsCount - 1]?.difficultyTier) || 'easy';
         next = {
-          section:
-            'verbal',
-
-          questionType:
-            'cross_question',
-
-          text: String(
-            result.followUpQuestion ||
-            evaluation.followUpQuestion
-          ),
-
-          category:
-            'Cross-question',
-
-          crossQuestion:
-            true,
+          section: 'verbal',
+          questionType: 'cross_question',
+          difficultyTier: currentTier,
+          text: String(result.followUpQuestion || evaluation.followUpQuestion),
+          category: `${currentTier.charAt(0).toUpperCase() + currentTier.slice(1)} / Follow-up`,
+          crossQuestion: true,
         };
+        console.log(`🎯 Triggered single follow-up for Question ${mainQuestionsCount}`);
       } else {
         // ----------------------------------------------------
-        // NORMAL NEXT QUESTION
+        // PROGRESS TO NEXT MAIN QUESTION FROM 3-TIER QUESTION BANK
         // ----------------------------------------------------
-
-        next =
-          await callWithRetry(
-            () =>
-              llm.nextQuestion({
-                setup:
-                  interview.setup,
-
-                plan,
-
-                history:
-                  historyFrom(
-                    interview
-                  ),
-
-                questionIndex:
-                  interview.answers
-                    .length + 1,
-
-                lastEvaluation:
-                  evaluation,
-              }),
-            {
-              maxAttempts: 30,
-              delayMs: 1000,
-            }
-          );
+        if (Array.isArray(interview.questionBank) && mainQuestionsCount < interview.questionBank.length) {
+          next = interview.questionBank[mainQuestionsCount];
+          console.log(`PROGRESSING QUESTION BANK (0ms delay): Question Bank Index ${mainQuestionsCount + 1}/${interview.questionBank.length} (${next.difficultyTier || 'tiered'})`);
+        } else {
+          const localBank = generateLocalQuestionBank(interview.setup, plan);
+          next = localBank[mainQuestionsCount % localBank.length] || localBank[0];
+        }
       }
 
       // ------------------------------------------------------

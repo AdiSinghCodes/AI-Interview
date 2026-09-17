@@ -24,6 +24,7 @@ const InterviewSchema = new mongoose.Schema({
   completedAt: Date,
   durationSeconds: Number,
   answers: [AnswerSchema],
+  questionBank: [mongoose.Schema.Types.Mixed],
   summary: mongoose.Schema.Types.Mixed,
   finalScore: Number,
   questionCount: Number,

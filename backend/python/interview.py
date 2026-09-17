@@ -409,6 +409,35 @@ def evaluate():
 # START FLASK SERVER
 # ============================================================
 
+
+# ============================================================
+# BATCH GENERATE QUESTION BANK
+# ============================================================
+
+@app.post("/generate-bank")
+def generate_bank():
+    try:
+        p = request.get_json(force=True) or {}
+        setup = p.get("setup", {})
+        plan = p.get("plan", {})
+
+        from bank_generator import generate_question_bank
+        questions = generate_question_bank(setup, plan)
+
+        return jsonify({
+            "ok": True,
+            "questions": questions,
+            "count": len(questions)
+        })
+    except Exception as e:
+        print("Generate question bank error:", e, flush=True)
+        return jsonify({
+            "ok": False,
+            "message": str(e),
+            "questions": []
+        }), 500
+
+
 if __name__ == "__main__":
 
     port = int(
