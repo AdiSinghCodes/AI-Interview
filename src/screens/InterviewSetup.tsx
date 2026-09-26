@@ -359,23 +359,41 @@ export default function InterviewSetup({ onNavigate }: { onNavigate: (s: Screen)
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setUseResume(value => !value)}
-              disabled={!hasResume}
-              style={{
-                border: 0,
-                borderRadius: 20,
-                padding: '8px 14px',
-                background: useResume && hasResume ? '#3358E8' : '#D0D5DD',
-                color: '#fff',
-                fontWeight: 700,
-                cursor: hasResume ? 'pointer' : 'not-allowed',
-                flexShrink: 0
-              }}
-            >
-              {useResume && hasResume ? 'ON' : 'OFF'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => onNavigate('profile')}
+                style={{
+                  border: '1px solid #D9DEE8',
+                  borderRadius: 20,
+                  padding: '8px 14px',
+                  background: '#fff',
+                  color: '#3358E8',
+                  fontWeight: 700,
+                  fontSize: 12,
+                  cursor: 'pointer'
+                }}
+              >
+                {hasResume ? 'Change Resume' : 'Upload Resume'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setUseResume(value => !value)}
+                disabled={!hasResume}
+                style={{
+                  border: 0,
+                  borderRadius: 20,
+                  padding: '8px 14px',
+                  background: useResume && hasResume ? '#3358E8' : '#D0D5DD',
+                  color: '#fff',
+                  fontWeight: 700,
+                  cursor: hasResume ? 'pointer' : 'not-allowed'
+                }}
+              >
+                {useResume && hasResume ? 'ON' : 'OFF'}
+              </button>
+            </div>
           </div>
 
           <div className="viva-two">

@@ -48,7 +48,7 @@ export default function ProfileScreen({onNavigate,onLogout}:Props){
     <section style={{background:'#fff',border:'1px solid #e4e7ec',borderRadius:14,padding:18,marginBottom:14}}>
       <h2 style={{fontFamily:'Outfit',fontSize:18,margin:'0 0 12px'}}>Resume — autofill source</h2>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:15,flexWrap:'wrap',padding:14,border:'1px dashed #b9c1d0',borderRadius:10}}>
-       <div><b>{user?.profile?.resume?.fileName||'No resume uploaded'}</b><div style={{fontSize:12,color:'#667085',marginTop:4}}>{uploading?'Extracting resume…':'PDF, DOCX or TXT · up to 10MB'}</div></div>
+       <div><b>{user?.profile?.resume?.fileName||'No resume uploaded'}</b><div style={{fontSize:12,color:'#667085',marginTop:4}}>{uploading?'Extracting resume…':'PDF, DOCX or TXT · up to 20MB'}</div></div>
        <label style={{background:'#3358E8',color:'#fff',padding:'10px 15px',borderRadius:9,fontWeight:800,fontSize:12,cursor:'pointer'}}>{uploading?'Analyzing…':'Upload / Replace Resume'}<input disabled={uploading} type="file" accept=".pdf,.doc,.docx,.txt" style={{display:'none'}} onChange={e=>onResume(e.target.files?.[0])}/></label>
       </div>
     </section>

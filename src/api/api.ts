@@ -229,6 +229,21 @@ export const api = {
       '/resume/analysis'
     ),
 
+  resumeAnalysisFor: (
+    targetRole: string,
+    jobDescription: string
+  ) =>
+    request(
+      '/resume/analysis',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          targetRole,
+          jobDescription,
+        }),
+      }
+    ),
+
   // ----------------------------------------------------------
   // LIVE AI INTERVIEW
   // ----------------------------------------------------------

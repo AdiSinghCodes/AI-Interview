@@ -10,7 +10,7 @@ import {
   VideoOffIcon,
   ScreenShareIcon,
   LeaveCallIcon,
-  BotAvatarIcon,
+  HumanAvatarIcon,
 } from '../components/MeetingIcons'
 
 type QType = 'verbal' | 'coding' | 'sql'
@@ -1528,7 +1528,7 @@ async function startAIInterview() {
                     marginBottom: '12px',
                   }}
                 >
-                  <BotAvatarIcon size={isMobile ? 24 : 32} color="#fff" />
+                  <HumanAvatarIcon size={isMobile ? 24 : 32} color="#fff" />
                 </div>
 
                 <h3
@@ -1647,7 +1647,7 @@ async function startAIInterview() {
                     boxShadow: '0 0 40px rgba(124,58,237,0.3)',
                   }}
                 >
-                  <BotAvatarIcon size={isMobile ? 28 : 44} color="#fff" />
+                  <HumanAvatarIcon size={isMobile ? 28 : 44} color="#fff" />
                 </div>
 
                 <div

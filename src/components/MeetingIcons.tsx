@@ -88,6 +88,16 @@ export function BotAvatarIcon({ size = 44, color = '#fff' }: IconProps) {
     )
 }
 
+export function HumanAvatarIcon({ size = 44, color = '#fff' }: IconProps) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="8.2" r="4.2" stroke={color} strokeWidth="1.6" fill="none" />
+            <path d="M8.4 5.6c.9 1 2.2 1.5 3.6 1.5s2.7-.5 3.6-1.5" stroke={color} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+            <path d="M4 20c0-4.1 3.6-6.8 8-6.8s8 2.7 8 6.8" stroke={color} strokeWidth="1.6" strokeLinecap="round" fill="none" />
+        </svg>
+    )
+}
+
 export function UserAvatarIcon({ size = 56, color = '#fff' }: IconProps) {
     return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
